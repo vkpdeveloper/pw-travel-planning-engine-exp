@@ -3,7 +3,7 @@ import { z } from "zod";
 const envSchema = z.object({
   GOOGLE_GENERATIVE_API_KEY: z.string().min(1, "GOOGLE_GENERATIVE_API_KEY is required"),
   GOOGLE_MAPS_API_KEY: z.string().min(1, "GOOGLE_MAPS_API_KEY is required"),
-  FLIGHT_API_KEY: z.string().min(1, "FLIGHT_API_KEY is required"),
+  FLIGHTS_API_KEY: z.string().min(1, "FLIGHTS_API_KEY is required"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
 

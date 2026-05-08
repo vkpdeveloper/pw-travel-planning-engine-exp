@@ -1,0 +1,20 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - '--build-arg'
+      - 'GOOGLE_GENERATIVE_API_KEY=${_GOOGLE_GENERATIVE_API_KEY}'
+      - '--build-arg'
+      - 'GOOGLE_MAPS_API_KEY=${_GOOGLE_MAPS_API_KEY}'
+      - '--build-arg'
+      - 'FLIGHTS_API_KEY=${_FLIGHTS_API_KEY}'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/warm-up:latest'
+      - '.'
+
+images:
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/warm-up:latest'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY

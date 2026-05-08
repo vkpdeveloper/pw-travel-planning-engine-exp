@@ -8,7 +8,7 @@ interface Coords {
   lng: number;
 }
 
-interface AnimatedMapProps {
+export interface AnimatedMapProps {
   originCoords: Coords;
   destCoords: Coords;
   centerCoords: Coords;
@@ -166,9 +166,10 @@ export function AnimatedMap({
       try {
         setOptions({ key: apiKey!, v: "weekly" });
 
-        const { Map, Marker, Polyline, SymbolPath } = (await importLibrary(
+        const { Map, Marker, Polyline } = (await importLibrary(
           "maps"
         )) as google.maps.MapsLibrary & { Marker: typeof google.maps.Marker };
+        const SymbolPath = google.maps.SymbolPath;
 
         if (!isMounted || !mapRef.current) return;
 

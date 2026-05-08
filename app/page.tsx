@@ -1,12 +1,17 @@
 "use client";
 
-import { useChat } from "ai/react";
-import { useEffect, useRef, useState, useCallback } from "react";
+import React from "react";
+import { Streamdown } from "streamdown";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { ToolCallStatus } from "@/components/travel/ToolCallStatus";
 import { FlightResults } from "@/components/travel/FlightResults";
 import { QuestionFlow } from "@/components/travel/QuestionFlow";
+import type { AnimatedMapProps } from "@/components/travel/AnimatedMap";
 
 // Dynamically import the map (no SSR - needs window/google)
 const AnimatedMap = dynamic(
@@ -48,94 +53,27 @@ function TypingDots() {
   );
 }
 
-// Markdown-like text renderer (simple)
-function StreamingText({ text }: { text: string }) {
-  const lines = text.split("\n");
-  return (
-    <div className="space-y-2">
-      {lines.map((line, i) => {
-        if (!line.trim()) return <div key={i} className="h-2" />;
-
-        // Headers
-        if (line.startsWith("### "))
-          return (
-            <h3 key={i} className="text-white font-bold text-base mt-3">
-              {line.slice(4)}
-            </h3>
-          );
-        if (line.startsWith("## "))
-          return (
-            <h2 key={i} className="text-white font-bold text-lg mt-4">
-              {line.slice(3)}
-            </h2>
-          );
-        if (line.startsWith("# "))
-          return (
-            <h1 key={i} className="text-white font-bold text-xl mt-4">
-              {line.slice(2)}
-            </h1>
-          );
-
-        // List items
-        if (line.match(/^[-*•]\s/))
-          return (
-            <div key={i} className="flex items-start gap-2">
-              <span className="text-indigo-400 mt-1 shrink-0">•</span>
-              <p className="text-white/80 text-sm leading-relaxed">
-                {renderInline(line.slice(2))}
-              </p>
-            </div>
-          );
-
-        // Numbered list
-        if (line.match(/^\d+\.\s/))
-          return (
-            <div key={i} className="flex items-start gap-2">
-              <span className="text-indigo-400 text-sm font-bold shrink-0 mt-0.5">
-                {line.match(/^(\d+)/)?.[1]}.
-              </span>
-              <p className="text-white/80 text-sm leading-relaxed">
-                {renderInline(line.replace(/^\d+\.\s/, ""))}
-              </p>
-            </div>
-          );
-
-        return (
-          <p key={i} className="text-white/80 text-sm leading-relaxed">
-            {renderInline(line)}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
-function renderInline(text: string): React.ReactNode {
-  // Bold
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return (
-        <strong key={i} className="text-white font-semibold">
-          {part.slice(2, -2)}
-        </strong>
-      );
-    }
-    return part;
-  });
+// Map SDK v6 tool states to ToolCallStatus legacy states
+function mapToolState(
+  state: "input-streaming" | "input-available" | "output-available" | "output-error" | string
+): "partial-call" | "call" | "result" {
+  if (state === "input-streaming") return "partial-call";
+  if (state === "input-available") return "call";
+  return "result"; // output-available, output-error, etc.
 }
 
 export default function TravelAgentPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [input, setInput] = useState("");
   const [submittedQuestions, setSubmittedQuestions] = useState<Set<string>>(new Set());
 
-  const { messages, input, handleInputChange, handleSubmit, append, isLoading, setInput } =
-    useChat({
-      api: "/api/travel",
-      onError: (err) => console.error("Chat error:", err),
-    });
+  const { messages, sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({ api: "/api/travel" }),
+    onError: (err: Error) => console.error("Chat error:", err),
+  });
 
+  const isLoading = status === "streaming" || status === "submitted";
   const hasMessages = messages.length > 0;
 
   // Auto-scroll to bottom
@@ -155,31 +93,25 @@ export default function TravelAgentPage() {
     (e?: React.FormEvent) => {
       if (e) e.preventDefault();
       if (!input.trim() || isLoading) return;
-      handleSubmit(e as React.FormEvent<HTMLFormElement>);
+      sendMessage({ text: input });
+      setInput("");
     },
-    [input, isLoading, handleSubmit]
+    [input, isLoading, sendMessage]
   );
 
   const handleSuggestion = (suggestion: string) => {
-    setInput(suggestion);
-    setTimeout(() => {
-      append({ role: "user", content: suggestion });
-    }, 50);
+    sendMessage({ text: suggestion });
   };
 
   const handleQuestionSubmit = useCallback(
     (toolCallId: string, answers: Record<string, string>) => {
       setSubmittedQuestions((prev) => new Set([...prev, toolCallId]));
-      // Build a natural language answer from structured responses
       const answerText = Object.entries(answers)
         .map(([key, value]) => `${key.replace(/_/g, " ")}: ${value}`)
         .join(", ");
-      append({
-        role: "user",
-        content: `Here are my answers: ${answerText}`,
-      });
+      sendMessage({ text: `Here are my answers: ${answerText}` });
     },
-    [append]
+    [sendMessage]
   );
 
   return (
@@ -224,7 +156,7 @@ export default function TravelAgentPage() {
                       Where do you want to go?
                     </h2>
                     <p className="text-white/45 text-base max-w-md">
-                      Tell me your travel plans and I'll find flights, map your route, and
+                      Tell me your travel plans and I&apos;ll find flights, map your route, and
                       create a personalized experience guide.
                     </p>
                   </div>
@@ -253,9 +185,10 @@ export default function TravelAgentPage() {
                   <div className="flex justify-end">
                     <div className="max-w-[80%] rounded-2xl rounded-tr-md bg-indigo-500/20 border border-indigo-400/20 px-4 py-3">
                       <p className="text-white/90 text-sm leading-relaxed">
-                        {typeof message.content === "string"
-                          ? message.content
-                          : JSON.stringify(message.content)}
+                        {message.parts
+                          .filter((p) => p.type === "text")
+                          .map((p) => (p as { type: "text"; text: string }).text)
+                          .join("")}
                       </p>
                     </div>
                   </div>
@@ -264,33 +197,41 @@ export default function TravelAgentPage() {
                 {/* Assistant message */}
                 {message.role === "assistant" && (
                   <div className="space-y-3">
-                    {/* Render each part */}
-                    {message.parts?.map((part, partIdx) => {
+                    {message.parts.map((part, partIdx) => {
                       // Text part
-                      if (part.type === "text" && part.text) {
+                      if (part.type === "text") {
+                        const textPart = part as { type: "text"; text: string };
+                        if (!textPart.text) return null;
                         return (
                           <div key={partIdx} className="flex items-start gap-3">
                             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shrink-0 mt-0.5">
                               <span className="text-xs">✈</span>
                             </div>
                             <div className="flex-1 pt-0.5">
-                              <StreamingText text={part.text} />
+                              <Streamdown isAnimating={status === "streaming"}>
+                                {textPart.text}
+                              </Streamdown>
                             </div>
                           </div>
                         );
                       }
 
-                      // Tool invocation part
-                      if (part.type === "tool-invocation") {
-                        const { toolInvocation } = part;
-                        const { toolName, toolCallId, state } = toolInvocation;
-                        const input = "input" in toolInvocation ? toolInvocation.input : undefined;
-                        const output =
-                          "output" in toolInvocation ? toolInvocation.output : undefined;
+                      // Dynamic tool part (server-side tools appear as dynamic-tool in client)
+                      if (part.type === "dynamic-tool") {
+                        const toolPart = part as {
+                          type: "dynamic-tool";
+                          toolName: string;
+                          toolCallId: string;
+                          state: string;
+                          input: unknown;
+                          output?: unknown;
+                        };
+                        const { toolName, toolCallId, state, input: toolInput, output } = toolPart;
+                        const mappedState = mapToolState(state);
 
                         // Q&A tool — render interactive form
                         if (toolName === "askFollowUpQuestions") {
-                          if (state === "result" && output) {
+                          if (state === "output-available" && output) {
                             const result = output as {
                               context: string;
                               questions: Array<{
@@ -315,13 +256,12 @@ export default function TravelAgentPage() {
                               </div>
                             );
                           }
-                          // Loading state
                           return (
                             <div key={partIdx}>
                               <ToolCallStatus
                                 toolName={toolName}
-                                state={state as "partial-call" | "call" | "result"}
-                                input={input}
+                                state={mappedState}
+                                input={toolInput}
                                 output={output}
                               />
                             </div>
@@ -334,15 +274,17 @@ export default function TravelAgentPage() {
                             <div key={partIdx} className="space-y-3">
                               <ToolCallStatus
                                 toolName={toolName}
-                                state={state as "partial-call" | "call" | "result"}
-                                input={input}
+                                state={mappedState}
+                                input={toolInput}
                                 output={output}
                               />
-                              {state === "result" && output && !(output as Record<string, unknown>).error && (
-                                <AnimatedMap
-                                  {...(output as Parameters<typeof AnimatedMap>[0])}
-                                />
-                              )}
+                              {state === "output-available" &&
+                                !!output &&
+                                !(output as Record<string, unknown>).error && (
+                                  <AnimatedMap
+                                    {...(output as AnimatedMapProps)}
+                                  />
+                                )}
                             </div>
                           );
                         }
@@ -353,11 +295,11 @@ export default function TravelAgentPage() {
                             <div key={partIdx} className="space-y-3">
                               <ToolCallStatus
                                 toolName={toolName}
-                                state={state as "partial-call" | "call" | "result"}
-                                input={input}
+                                state={mappedState}
+                                input={toolInput}
                                 output={output}
                               />
-                              {state === "result" && output && (
+                              {state === "output-available" && !!output && (
                                 <FlightResults
                                   data={output as Parameters<typeof FlightResults>[0]["data"]}
                                 />
@@ -371,8 +313,8 @@ export default function TravelAgentPage() {
                           <div key={partIdx}>
                             <ToolCallStatus
                               toolName={toolName}
-                              state={state as "partial-call" | "call" | "result"}
-                              input={input}
+                              state={mappedState}
+                              input={toolInput}
                               output={output}
                             />
                           </div>
@@ -380,23 +322,7 @@ export default function TravelAgentPage() {
                       }
 
                       return null;
-                    }) || (
-                      // Fallback for messages without parts
-                      <div className="flex items-start gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shrink-0 mt-0.5">
-                          <span className="text-xs">✈</span>
-                        </div>
-                        <div className="flex-1 pt-0.5">
-                          <StreamingText
-                            text={
-                              typeof message.content === "string"
-                                ? message.content
-                                : ""
-                            }
-                          />
-                        </div>
-                      </div>
-                    )}
+                    })}
                   </div>
                 )}
               </div>
@@ -425,7 +351,9 @@ export default function TravelAgentPage() {
               <Input
                 ref={textareaRef}
                 value={input}
-                onChange={handleInputChange}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  setInput(e.target.value)
+                }
                 onSubmit={onSubmit}
                 placeholder={
                   hasMessages

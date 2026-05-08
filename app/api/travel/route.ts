@@ -1,12 +1,29 @@
-import { google } from "@ai-sdk/google";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { streamText, tool, stepCountIs, convertToModelMessages, UIMessage } from "ai";
 import { z } from "zod";
 import { env } from "@/lib/env";
 
-const MAPS_BASE = "https://maps.googleapis.com/maps/api";
+const MAPS_PLACES_BASE = "https://maps.googleapis.com/maps/api/place";
+const MAPS_ROUTES_BASE = "https://routes.googleapis.com/directions/v2:computeRoutes";
 const FLIGHT_BASE = "https://api.flightapi.io";
 
-const systemPrompt = `You are an expert travel experience agent — enthusiastic, knowledgeable, and deeply passionate about helping people explore the world.
+const google = createGoogleGenerativeAI({
+  apiKey: env.GOOGLE_GENERATIVE_API_KEY,
+})
+
+const getSystemPrompt = () => {
+  const now = new Date();
+  const dateStr = now.toLocaleString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZoneName: "longOffset",
+  });
+  return `You are an expert travel experience agent — enthusiastic, knowledgeable, and deeply passionate about helping people explore the world.
 
 ## Your Flow
 1. **Understand the request** — extract source city/airport, destination, travel date, number of passengers, cabin preference, and experience type from the user's message.
@@ -25,7 +42,8 @@ const systemPrompt = `You are an expert travel experience agent — enthusiastic
 - Travel date is REQUIRED for flight search
 - If the user provides partial info, extract what you can and only ask about what's missing
 - Use IATA codes for airports (e.g. JFK, CDG, BOM, LHR)
-- Always present flights and routes AFTER they load — do not make up data`;
+- Always present flights and routes AFTER they load — do not make up data
+- The current date and time is **${dateStr}**`;};
 
 // --- Tool: Ask Follow-Up Questions ---
 const askFollowUpQuestions = tool({
@@ -70,22 +88,23 @@ const calculateRoute = tool({
   }),
   execute: async ({ origin, destination, originIata, destinationIata }) => {
     try {
-      // Geocode both locations to get coordinates
-      const [originGeo, destGeo] = await Promise.all([
-        fetch(
-          `${MAPS_BASE}/geocode/json?address=${encodeURIComponent(origin)}&key=${env.GOOGLE_MAPS_API_KEY}`
-        ).then((r) => r.json()),
-        fetch(
-          `${MAPS_BASE}/geocode/json?address=${encodeURIComponent(destination)}&key=${env.GOOGLE_MAPS_API_KEY}`
-        ).then((r) => r.json()),
+      // --- Step 1: Geocode both locations via Places Text Search ---
+      const geocode = async (query: string) => {
+        const res = await fetch(
+          `${MAPS_PLACES_BASE}/textsearch/json?query=${encodeURIComponent(query)}&key=${env.GOOGLE_MAPS_API_KEY}`
+        ).then((r) => r.json());
+        const place = res.results?.[0];
+        return place
+          ? { coords: place.geometry.location as { lat: number; lng: number }, name: place.name as string }
+          : null;
+      };
+
+      const [originPlace, destPlace] = await Promise.all([
+        geocode(originIata ? `${originIata} Airport` : origin),
+        geocode(destinationIata ? `${destinationIata} Airport` : destination),
       ]);
 
-      const originCoords = originGeo.results?.[0]?.geometry?.location;
-      const destCoords = destGeo.results?.[0]?.geometry?.location;
-      const originName = originGeo.results?.[0]?.formatted_address || origin;
-      const destName = destGeo.results?.[0]?.formatted_address || destination;
-
-      if (!originCoords || !destCoords) {
+      if (!originPlace || !destPlace) {
         return {
           error: "Could not geocode one or both locations",
           origin,
@@ -95,45 +114,80 @@ const calculateRoute = tool({
         };
       }
 
-      // Get transit directions for route polyline
-      const directionsRes = await fetch(
-        `${MAPS_BASE}/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=transit&key=${env.GOOGLE_MAPS_API_KEY}`
-      ).then((r) => r.json());
+      const originCoords = originPlace.coords;
+      const destCoords = destPlace.coords;
 
-      let encodedPolyline: string | null = null;
-      let distance = "N/A";
-      let duration = "N/A";
-
-      if (directionsRes.routes?.[0]) {
-        const route = directionsRes.routes[0];
-        encodedPolyline = route.overview_polyline?.points || null;
-        distance = route.legs?.[0]?.distance?.text || "N/A";
-        duration = route.legs?.[0]?.duration?.text || "N/A";
-      } else {
-        // Calculate straight-line (great-circle) distance using Haversine formula
+      // --- Step 2: Haversine great-circle distance (always used for flights) ---
+      const haversine = (c1: { lat: number; lng: number }, c2: { lat: number; lng: number }) => {
         const R = 6371;
-        const dLat = ((destCoords.lat - originCoords.lat) * Math.PI) / 180;
-        const dLon = ((destCoords.lng - originCoords.lng) * Math.PI) / 180;
+        const dLat = ((c2.lat - c1.lat) * Math.PI) / 180;
+        const dLon = ((c2.lng - c1.lng) * Math.PI) / 180;
         const a =
           Math.sin(dLat / 2) ** 2 +
-          Math.cos((originCoords.lat * Math.PI) / 180) *
-            Math.cos((destCoords.lat * Math.PI) / 180) *
-            Math.sin(dLon / 2) ** 2;
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        const distKm = Math.round(R * c);
-        const distMi = Math.round(distKm * 0.621371);
-        distance = `${distKm.toLocaleString()} km (${distMi.toLocaleString()} mi)`;
+          Math.cos((c1.lat * Math.PI) / 180) *
+          Math.cos((c2.lat * Math.PI) / 180) *
+          Math.sin(dLon / 2) ** 2;
+        return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+      };
+
+      const distKm = haversine(originCoords, destCoords);
+      const distMi = Math.round(distKm * 0.621371);
+      const isLongHaul = distKm > 500; // treat as flight route if > 500 km
+
+      let encodedPolyline: string | null = null;
+      let distance = `${distKm.toLocaleString()} km (${distMi.toLocaleString()} mi)`;
+      let duration: string;
+      let isFlightRoute = isLongHaul;
+
+      if (isLongHaul) {
+        // For flights, estimate duration at ~900 km/h cruise speed
         const hours = Math.floor(distKm / 900);
         const mins = Math.round(((distKm / 900) % 1) * 60);
         duration = hours > 0 ? `~${hours}h ${mins}m flight` : `~${mins}m flight`;
+      } else {
+        // --- Step 3: Try Routes API for ground routes ---
+        try {
+          const routesRes = await fetch(MAPS_ROUTES_BASE, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Goog-Api-Key": env.GOOGLE_MAPS_API_KEY,
+              "X-Goog-FieldMask":
+                "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline",
+            },
+            body: JSON.stringify({
+              origin: { address: originPlace.name },
+              destination: { address: destPlace.name },
+              travelMode: "DRIVE",
+            }),
+          }).then((r) => r.json());
+
+          const route = routesRes.routes?.[0];
+          if (route) {
+            encodedPolyline = route.polyline?.encodedPolyline || null;
+            const dMeters = route.distanceMeters || distKm * 1000;
+            const dKm = Math.round(dMeters / 1000);
+            const dMi = Math.round(dKm * 0.621371);
+            distance = `${dKm.toLocaleString()} km (${dMi.toLocaleString()} mi)`;
+            const dSecs = parseInt((route.duration || "0s").replace("s", ""), 10);
+            const dHours = Math.floor(dSecs / 3600);
+            const dMins = Math.round((dSecs % 3600) / 60);
+            duration = dHours > 0 ? `${dHours}h ${dMins}m drive` : `${dMins}m drive`;
+            isFlightRoute = false;
+          } else {
+            duration = `~${Math.round(distKm / 60)} min drive`;
+          }
+        } catch {
+          duration = `~${Math.round(distKm / 60)} min drive`;
+        }
       }
 
       const centerLat = (originCoords.lat + destCoords.lat) / 2;
       const centerLng = (originCoords.lng + destCoords.lng) / 2;
 
       return {
-        origin: originName,
-        destination: destName,
+        origin: originPlace.name,
+        destination: destPlace.name,
         originIata: originIata || null,
         destinationIata: destinationIata || null,
         originCoords,
@@ -142,7 +196,7 @@ const calculateRoute = tool({
         encodedPolyline,
         distance,
         duration,
-        isFlightRoute: !directionsRes.routes?.[0],
+        isFlightRoute,
       };
     } catch (error) {
       console.error("calculateRoute error:", error);
@@ -185,7 +239,7 @@ const searchFlights = tool({
     currency,
   }) => {
     try {
-      const url = `${FLIGHT_BASE}/onewaytrip/${env.FLIGHT_API_KEY}/${departureIata.toUpperCase()}/${arrivalIata.toUpperCase()}/${departureDate}/${adults}/${children}/${infants}/${cabinClass}/${currency}`;
+      const url = `${FLIGHT_BASE}/onewaytrip/${env.FLIGHTS_API_KEY}/${departureIata.toUpperCase()}/${arrivalIata.toUpperCase()}/${departureDate}/${adults}/${children}/${infants}/${cabinClass}/${currency}`;
 
       const response = await fetch(url, {
         headers: { Accept: "application/json" },
@@ -218,54 +272,56 @@ const searchFlights = tool({
       const places = data.places || [];
 
       const flights = itineraries.slice(0, 6).map((itin: Record<string, unknown>) => {
-        const legIds = (itin.legIds as string[]) || [];
-        const leg = legs.find((l: Record<string, unknown>) => l.id === legIds[0]) || {};
-        const segmentIds = (leg.segmentIds as string[]) || [];
+        const legIds = (itin.leg_ids as string[]) || [];
+        const leg = legs.find((l: Record<string, unknown>) => l.id === legIds[0]) || {} as Record<string, unknown>;
+        const segmentIds = (leg.segment_ids as string[]) || [];
         const segments =
           data.segments?.filter((s: Record<string, unknown>) =>
             segmentIds.includes(s.id as string)
           ) || [];
 
-        const carrierId = segments[0]?.operatingCarrierId;
+        const carrierId = segments[0]?.operating_carrier_id;
         const carrier = carriers.find((c: Record<string, unknown>) => c.id === carrierId);
         const originPlace = places.find(
-          (p: Record<string, unknown>) => p.id === leg.originPlaceId
+          (p: Record<string, unknown>) => p.id === leg.origin_place_id
         );
         const destPlace = places.find(
-          (p: Record<string, unknown>) => p.id === leg.destinationPlaceId
+          (p: Record<string, unknown>) => p.id === leg.destination_place_id
         );
 
-        const pricing = (itin.pricingOptions as Record<string, unknown>[])?.[0] || {};
+        const pricing = (itin.pricing_options as Record<string, unknown>[])?.[0] || {};
         const price = (pricing.price as Record<string, unknown>) || {};
+
+        const durationMins = leg.duration as number | undefined;
 
         return {
           id: itin.id,
           price: {
-            amount: price.amount || 0,
-            currency: (price.unit as string)?.toUpperCase() || currency,
+            amount: (price.amount as number) || 0,
+            currency: currency,
             formatted: price.amount
-              ? `${(price.unit as string)?.toUpperCase() || currency} ${Number(price.amount).toFixed(2)}`
+              ? `${currency} ${Number(price.amount).toFixed(2)}`
               : "Price unavailable",
           },
           carrier: {
-            name: carrier?.name || "Unknown Airline",
-            iata: carrier?.iata || "",
-            imageUrl: carrier?.imageUrl || null,
+            name: (carrier?.name as string) || "Unknown Airline",
+            iata: (carrier?.display_code as string) || (carrier?.alt_id as string) || "",
+            imageUrl: null,
           },
           departure: {
-            time: leg.departure || "",
-            airport: originPlace?.name || departureIata,
-            iata: originPlace?.iata || departureIata,
+            time: (leg.departure as string) || "",
+            airport: (originPlace?.name as string) || departureIata,
+            iata: (originPlace?.display_code as string) || (originPlace?.alt_id as string) || departureIata,
           },
           arrival: {
-            time: leg.arrival || "",
-            airport: destPlace?.name || arrivalIata,
-            iata: destPlace?.iata || arrivalIata,
+            time: (leg.arrival as string) || "",
+            airport: (destPlace?.name as string) || arrivalIata,
+            iata: (destPlace?.display_code as string) || (destPlace?.alt_id as string) || arrivalIata,
           },
-          duration: leg.durationInMinutes
-            ? `${Math.floor((leg.durationInMinutes as number) / 60)}h ${(leg.durationInMinutes as number) % 60}m`
+          duration: durationMins
+            ? `${Math.floor(durationMins / 60)}h ${durationMins % 60}m`
             : "N/A",
-          stops: (leg.stopCount as number) || 0,
+          stops: (leg.stop_count as number) || 0,
           cabinClass,
         };
       });
@@ -300,8 +356,8 @@ export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
 
   const result = streamText({
-    model: google("gemini-2.0-flash"),
-    system: systemPrompt,
+    model: google("gemini-3.1-flash-lite"),
+    system: getSystemPrompt(),
     messages: await convertToModelMessages(messages),
     tools: {
       askFollowUpQuestions,
