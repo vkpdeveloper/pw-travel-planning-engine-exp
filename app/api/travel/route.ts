@@ -4,7 +4,9 @@ import { z } from "zod";
 import { env } from "@/lib/env";
 
 const MAPS_PLACES_BASE = "https://maps.googleapis.com/maps/api/place";
+const PLACES_V1_BASE = "https://places.googleapis.com/v1";
 const MAPS_ROUTES_BASE = "https://routes.googleapis.com/directions/v2:computeRoutes";
+const AERIAL_VIEW_BASE = "https://aerialview.googleapis.com/v1";
 const FLIGHT_BASE = "https://api.flightapi.io";
 
 const google = createGoogleGenerativeAI({
@@ -30,7 +32,10 @@ const getSystemPrompt = () => {
 2. **Ask clarifying questions** — if any critical detail is missing (especially source, destination, or date), call the \`askFollowUpQuestions\` tool with a structured JSON object containing the questions. While doing so, also stream a friendly, warm intro message explaining what you need.
 3. **Calculate the route** — call \`calculateRoute\` with origin and destination to get real distance, duration, and map data.
 4. **Search flights** — call \`searchFlights\` with the IATA airport codes, date, and passenger info.
-5. **Describe the experience** — after tools complete, write a vivid, streaming narrative about what the user can expect: local culture, must-see places, food scene, best time of year, hidden gems, practical travel tips. Make it feel personal and inspiring.
+5. **Discover places** — call \`findPlaces\` with the destination and a category like "top attractions", "best restaurants", or "boutique hotels" to surface ratings, photos, opening hours, and price levels for the user.
+6. **Build an optimized day plan** — once you have 3+ interesting places, call \`optimizeItinerary\` with their place IDs to compute the best visit order with travel times between stops.
+7. **Show the destination cinematically** — call \`aerialView\` with a hero location (the destination city or a marquee landmark) so the user gets a stunning 3D fly-through.
+8. **Describe the experience** — after tools complete, write a vivid, streaming narrative tying together the photos, ratings, and itinerary you just surfaced. Make it feel personal and inspiring.
 
 ## Tone
 - Warm, conversational, and genuinely excited about travel
