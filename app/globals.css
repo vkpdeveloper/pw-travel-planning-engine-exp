@@ -124,6 +124,18 @@
   100% { background-position: -200% 0; }
 }
 
+/* Skeleton shimmer sweep — dark backgrounds (flights) */
+@keyframes shimmerSweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* Skeleton shimmer sweep — light backgrounds (place cards) */
+@keyframes shimmerSweepLight {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

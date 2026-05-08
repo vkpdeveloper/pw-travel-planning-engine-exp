@@ -32,9 +32,16 @@ const getSystemPrompt = (userProfile?: { name?: string; location?: { displayName
 
   return `You are an expert travel experience agent — enthusiastic, knowledgeable, and deeply passionate about helping people explore the world.
 
+## ABSOLUTE RULE — Question Asking
+**You MUST call the \`askFollowUpQuestions\` tool every single time you need information from the user. This is non-negotiable.**
+- NEVER ask questions as plain conversational text.
+- NEVER write "Could you tell me…", "What is your…", or any question sentence in your response.
+- If ANY required detail is missing, your ONLY option is to immediately call \`askFollowUpQuestions\` with a structured list of exactly what you need.
+- Before calling the tool, you may write one short friendly sentence (e.g. "Let me get a few details to find the perfect trip for you!"), then call the tool — do not ask anything in that sentence.
+
 ## Your Flow
 1. **Understand the request** — extract source city/airport, destination, travel date, number of passengers, cabin preference, and experience type from the user's message.
-2. **Ask clarifying questions** — if any critical detail is missing (especially source, destination, or date), call the \`askFollowUpQuestions\` tool with a structured JSON object containing the questions. While doing so, also stream a friendly, warm intro message explaining what you need.
+2. **Gather missing info via tool** — if source, destination, date, or passenger count is unclear, call \`askFollowUpQuestions\` immediately. Only ask for fields that are genuinely missing. Use \`type: "select"\` with sensible \`options\` whenever choices are finite (cabin class, trip type, number of passengers, etc.). Use \`type: "text"\` for open fields like city names. Use \`type: "date"\` for travel dates.
 3. **Calculate the route** — call \`calculateRoute\` with origin and destination to get real distance, duration, and map data.
 4. **Search flights** — call \`searchFlights\` with the IATA airport codes, date, and passenger info.
 5. **Discover places** — call \`findPlaces\` with the destination and a category like "top attractions", "best restaurants", or "boutique hotels" to surface ratings, photos, opening hours, and price levels for the user.
@@ -48,9 +55,9 @@ const getSystemPrompt = (userProfile?: { name?: string; location?: { displayName
 - Always keep the user engaged — even while tools are running, add interesting facts
 
 ## Important
-- Source and destination are REQUIRED before calling route/flight tools
-- Travel date is REQUIRED for flight search
-- If the user provides partial info, extract what you can and only ask about what's missing
+- Source and destination are REQUIRED before calling route/flight tools — use \`askFollowUpQuestions\` if missing
+- Travel date is REQUIRED for flight search — use \`askFollowUpQuestions\` if missing
+- If the user provides partial info, extract what you can and only ask about what's genuinely missing
 - Use IATA codes for airports (e.g. JFK, CDG, BOM, LHR)
 - Always present flights and routes AFTER they load — do not make up data
 - The current date and time is **${dateStr}**${userContext}`;
@@ -59,7 +66,7 @@ const getSystemPrompt = (userProfile?: { name?: string; location?: { displayName
 // --- Tool: Ask Follow-Up Questions ---
 const askFollowUpQuestions = tool({
   description:
-    "Ask the user clarifying questions when travel details are missing. Returns structured JSON with interactive question prompts. Call this when source, destination, date, or key preferences are unclear.",
+    "REQUIRED tool for asking the user any question. Call this whenever source city, destination, travel date, passenger count, cabin class, or any other needed detail is missing or ambiguous. This is the ONLY permitted way to ask the user a question — never ask in plain text. Provide a helpful context string and a precise list of questions with appropriate types and options.",
   inputSchema: z.object({
     context: z
       .string()
@@ -727,7 +734,7 @@ export async function POST(req: Request) {
   } = await req.json();
 
   const result = streamText({
-    model: google("gemini-3.1-flash-lite"),
+    model: google("gemini-3.1-pro-preview"),
     system: getSystemPrompt(userProfile),
     messages: await convertToModelMessages(messages),
     tools: {

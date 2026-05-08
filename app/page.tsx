@@ -9,9 +9,9 @@ import dynamic from "next/dynamic";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ToolCallStatus } from "@/components/travel/ToolCallStatus";
-import { FlightResults } from "@/components/travel/FlightResults";
+import { FlightResults, FlightLoadingSkeleton } from "@/components/travel/FlightResults";
 import { QuestionFlow } from "@/components/travel/QuestionFlow";
-import { PlaceCards } from "@/components/travel/PlaceCards";
+import { PlaceCards, PlaceCardsLoadingSkeleton } from "@/components/travel/PlaceCards";
 import { ItineraryRoute } from "@/components/travel/ItineraryRoute";
 import { AerialVideo } from "@/components/travel/AerialVideo";
 import type { AnimatedMapProps } from "@/components/travel/AnimatedMap";
@@ -362,38 +362,46 @@ export default function TravelAgentPage() {
                           const mappedState = mapToolState(state);
 
                           if (toolName === "askFollowUpQuestions") {
-                            if (state === "output-available" && output) {
-                              const result = output as {
-                                context: string;
-                                questions: Array<{
-                                  id: string;
-                                  question: string;
-                                  type: "text" | "date" | "number" | "select";
-                                  placeholder?: string;
-                                  options?: string[];
-                                  required: boolean;
-                                }>;
-                              };
+                            // While the model is filling in tool parameters — show status
+                            // with the streaming question list expanding below it.
+                            if (state !== "output-available") {
                               return (
                                 <div key={partIdx}>
-                                  <QuestionFlow
-                                    context={result.context}
-                                    questions={result.questions}
-                                    onSubmit={(answers) =>
-                                      handleQuestionSubmit(toolCallId, answers)
-                                    }
-                                    isSubmitted={submittedQuestions.has(toolCallId)}
+                                  <ToolCallStatus
+                                    toolName={toolName}
+                                    state={mappedState}
+                                    input={toolInput}
+                                    output={output}
                                   />
                                 </div>
                               );
                             }
+
+                            // Tool finished — render the inline QuestionCard.
+                            const result = output as {
+                              context: string;
+                              questions: Array<{
+                                id: string;
+                                question: string;
+                                type: "text" | "date" | "number" | "select";
+                                placeholder?: string;
+                                options?: string[];
+                                suggestions?: string[];
+                                required: boolean;
+                              }>;
+                            };
+
+                            if (!result) return null;
+
                             return (
                               <div key={partIdx}>
-                                <ToolCallStatus
-                                  toolName={toolName}
-                                  state={mappedState}
-                                  input={toolInput}
-                                  output={output}
+                                <QuestionFlow
+                                  context={result.context}
+                                  questions={result.questions}
+                                  onSubmit={(answers: Record<string, string>) =>
+                                    handleQuestionSubmit(toolCallId, answers)
+                                  }
+                                  isSubmitted={submittedQuestions.has(toolCallId)}
                                 />
                               </div>
                             );
@@ -420,6 +428,7 @@ export default function TravelAgentPage() {
                           }
 
                           if (toolName === "findPlaces") {
+                            const findInput = toolInput as { destination?: string; category?: string } | undefined;
                             return (
                               <div key={partIdx} className="space-y-3">
                                 <ToolCallStatus
@@ -428,6 +437,11 @@ export default function TravelAgentPage() {
                                   input={toolInput}
                                   output={output}
                                 />
+                                {state !== "output-available" && (
+                                  <PlaceCardsLoadingSkeleton
+                                    destination={findInput?.destination}
+                                  />
+                                )}
                                 {state === "output-available" && !!output && (
                                   <PlaceCards
                                     data={output as Parameters<typeof PlaceCards>[0]["data"]}
@@ -474,6 +488,10 @@ export default function TravelAgentPage() {
                           }
 
                           if (toolName === "searchFlights") {
+                            const flightInput = toolInput as {
+                              departureIata?: string;
+                              arrivalIata?: string;
+                            } | undefined;
                             return (
                               <div key={partIdx} className="space-y-3">
                                 <ToolCallStatus
@@ -482,6 +500,12 @@ export default function TravelAgentPage() {
                                   input={toolInput}
                                   output={output}
                                 />
+                                {state !== "output-available" && (
+                                  <FlightLoadingSkeleton
+                                    from={flightInput?.departureIata}
+                                    to={flightInput?.arrivalIata}
+                                  />
+                                )}
                                 {state === "output-available" && !!output && (
                                   <FlightResults
                                     data={output as Parameters<typeof FlightResults>[0]["data"]}
