@@ -734,7 +734,7 @@ export async function POST(req: Request) {
   } = await req.json();
 
   const result = streamText({
-    model: google("gemini-3.1-pro-preview"),
+    model: google("gemini-3-flash-preview"),
     system: getSystemPrompt(userProfile),
     messages: await convertToModelMessages(messages),
     tools: {
@@ -745,7 +745,7 @@ export async function POST(req: Request) {
       optimizeItinerary,
       aerialView,
     },
-    stopWhen: stepCountIs(14),
+    stopWhen: stepCountIs(100),
     maxOutputTokens: 12000,
     maxRetries: 3,
     providerOptions: {

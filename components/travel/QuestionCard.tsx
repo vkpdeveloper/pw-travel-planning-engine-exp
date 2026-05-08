@@ -71,7 +71,7 @@ export function QuestionCard({
       >
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-sm shadow-emerald-500/20 shrink-0">
-            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12">
+            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12" aria-hidden="true">
               <path
                 d="M2 6l3 3 5-5"
                 stroke="currentColor"
@@ -118,7 +118,7 @@ export function QuestionCard({
               className="flex items-start gap-2.5"
             >
               <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-blue-500 flex items-center justify-center shrink-0 shadow-md shadow-indigo-300/25 mt-0.5">
-                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 16 16">
+                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 16 16" aria-hidden="true">
                   <path
                     d="M2 4a2 2 0 012-2h8a2 2 0 012 2v5a2 2 0 01-2 2H9l-3 3V11H4a2 2 0 01-2-2V4z"
                     fill="currentColor"
@@ -149,10 +149,10 @@ export function QuestionCard({
               >
                 {/* Question label */}
                 <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-indigo-50 border border-indigo-200/70 flex items-center justify-center text-[10px] font-bold text-indigo-600 shrink-0">
+                  <span aria-hidden="true" className="w-5 h-5 rounded-full bg-indigo-50 border border-indigo-200/70 flex items-center justify-center text-[10px] font-bold text-indigo-600 shrink-0">
                     {idx + 1}
                   </span>
-                  <span className="text-slate-700 text-[13.5px] font-semibold leading-snug">
+                  <span id={`qc-label-${q.id}`} className="text-slate-700 text-[13.5px] font-semibold leading-snug">
                     {q.question}
                     {q.required !== false && (
                       <span className="text-indigo-400 ml-1 font-normal text-[11px]">
@@ -164,13 +164,14 @@ export function QuestionCard({
 
                 {/* Select — pill buttons */}
                 {q.type === "select" && q.options ? (
-                  <div className="pl-7">
+                  <div className="pl-7" role="group" aria-labelledby={`qc-label-${q.id}`}>
                     <div className="flex flex-wrap gap-2">
                       {q.options.map((opt) => (
                         <button
                           key={opt}
                           type="button"
                           onClick={() => handleChange(q.id, opt)}
+                          aria-pressed={answers[q.id] === opt}
                           className={cn(
                             "px-3.5 py-1.5 rounded-xl text-[12.5px] font-medium border transition-all duration-150 active:scale-95",
                             answers[q.id] === opt
@@ -183,7 +184,7 @@ export function QuestionCard({
                       ))}
                     </div>
                     {errors[q.id] && (
-                      <p className="text-red-500 text-[11px] font-medium mt-1.5">{errors[q.id]}</p>
+                      <p className="text-red-500 text-[11px] font-medium mt-1.5" role="alert">{errors[q.id]}</p>
                     )}
                   </div>
                 ) : (
@@ -192,6 +193,11 @@ export function QuestionCard({
                     <div className="relative">
                       <input
                         ref={(el) => { inputRefs.current[q.id] = el; }}
+                        id={`qc-input-${q.id}`}
+                        aria-labelledby={`qc-label-${q.id}`}
+                        aria-required={q.required !== false}
+                        aria-invalid={!!errors[q.id]}
+                        aria-describedby={errors[q.id] ? `qc-error-${q.id}` : undefined}
                         type={
                           q.type === "date"
                             ? "date"
@@ -242,6 +248,8 @@ export function QuestionCard({
                           exit={{ opacity: 0, y: -4 }}
                           transition={{ duration: 0.14 }}
                           className="flex flex-wrap gap-1.5"
+                          role="group"
+                          aria-label="Suggestions"
                         >
                           {q.suggestions.map((s) => (
                             <button
@@ -259,7 +267,7 @@ export function QuestionCard({
                     </AnimatePresence>
 
                     {errors[q.id] && (
-                      <p className="text-red-500 text-[11px] font-medium">{errors[q.id]}</p>
+                      <p id={`qc-error-${q.id}`} className="text-red-500 text-[11px] font-medium" role="alert">{errors[q.id]}</p>
                     )}
                   </div>
                 )}
@@ -282,9 +290,10 @@ export function QuestionCard({
               type="button"
               onClick={handleSubmit}
               whileTap={{ scale: 0.93 }}
+              aria-label="Submit answers"
               className="w-9 h-9 rounded-full bg-indigo-500 hover:bg-indigo-400 flex items-center justify-center shadow-md shadow-indigo-500/25 transition-colors duration-150 shrink-0 disabled:opacity-40"
             >
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 16 16">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 16 16" aria-hidden="true">
                 <path
                   d="M2 8h12M8 2l6 6-6 6"
                   stroke="currentColor"

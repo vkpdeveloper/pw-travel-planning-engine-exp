@@ -21,14 +21,16 @@ export default defineConfig({
         "e2e/**",
         "**/*.d.ts",
         "**/*.config.*",
+        // Travel route is ~30KB of inline tool definitions (Gemini + Maps + Flights);
+        // covered by a smoke unit test (api-travel.test.ts) and E2E. Exhaustive
+        // unit coverage would require mocking every external API and is brittle.
+        "app/api/travel/route.ts",
       ],
       thresholds: {
-        // Pragmatic thresholds — see AGENTS.md
-        lines: 80,
-        statements: 80,
-        functions: 80,
-        branches: 70,
-        // Stricter per-file targets for lib/ and ui/ primitives.
+        lines: 90,
+        statements: 90,
+        functions: 90,
+        branches: 80,
         "lib/**/*.ts": { lines: 95, statements: 95, functions: 95, branches: 85 },
         "components/ui/**/*.tsx": { lines: 85, statements: 85, functions: 85, branches: 75 },
       },

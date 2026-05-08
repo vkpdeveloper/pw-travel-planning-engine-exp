@@ -47,8 +47,8 @@ const SUGGESTIONS = [
 // Shimmering "thinking" indicator
 function TypingDots() {
   return (
-    <div className="relative inline-block">
-      <span className="bg-[linear-gradient(90deg,#94a3b8_0%,#94a3b8_40%,#0f172a_50%,#94a3b8_60%,#94a3b8_100%)] bg-[length:200%_100%] bg-clip-text text-transparent text-sm font-medium animate-[shimmer_2s_linear_infinite]">
+    <div className="relative inline-block" role="status" aria-label="Thinking">
+      <span aria-hidden="true" className="bg-[linear-gradient(90deg,#94a3b8_0%,#94a3b8_40%,#0f172a_50%,#94a3b8_60%,#94a3b8_100%)] bg-[length:200%_100%] bg-clip-text text-transparent text-sm font-medium animate-[shimmer_2s_linear_infinite]">
         Thinking
       </span>
     </div>
@@ -259,6 +259,13 @@ export default function TravelAgentPage() {
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#fafbfc]">
+      {/* Skip to main content for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-indigo-600 focus:text-white focus:rounded-lg focus:text-sm focus:font-medium"
+      >
+        Skip to main content
+      </a>
       <UserOnboardingDialog onComplete={handleProfileComplete} />
       {/* Background gradient layers - Animated Mesh */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/50 pointer-events-none" />
@@ -293,6 +300,7 @@ export default function TravelAgentPage() {
               stroke="currentColor"
               viewBox="0 0 24 24"
               xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -314,10 +322,15 @@ export default function TravelAgentPage() {
       </header>
 
       {/* Main content area */}
-      <main className="relative z-10 flex-1 flex flex-col items-center overflow-hidden">
+      <main id="main-content" className="relative z-10 flex-1 flex flex-col items-center overflow-hidden">
         {hasMessages ? (
           <div className="w-full flex-1 overflow-y-auto">
-            <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+            <div
+              className="max-w-3xl mx-auto px-4 py-6 space-y-6"
+              role="log"
+              aria-live="polite"
+              aria-label="Conversation"
+            >
               {messages.map((message) => (
                 <div key={message.id} className="space-y-3">
                   {/* User message */}
@@ -552,7 +565,7 @@ export default function TravelAgentPage() {
           <div className="max-w-3xl mx-auto w-full space-y-8">
             {!hasMessages && (
               <div className="space-y-2">
-                <h1 className="text-2xl md:text-3xl text-slate-700 font-medium">Hi {userProfile?.name || "there"}</h1>
+                <p className="text-2xl md:text-3xl text-slate-700 font-medium">Hi {userProfile?.name || "there"}</p>
                 <h2 className="text-4xl md:text-5xl text-slate-800 font-semibold">What can I help with?</h2>
               </div>
             )}
@@ -586,15 +599,16 @@ export default function TravelAgentPage() {
                   />
                 )}
                 {(input.trim() || isLoading) && (
-                  <button
+                <button
                     type="submit"
                     disabled={!input.trim() || isLoading}
+                    aria-label="Send message"
                     className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed bg-indigo-500 hover:bg-indigo-400 active:scale-95 shadow-lg shadow-indigo-500/20"
                   >
                     {isLoading ? (
-                      <div className="w-5 h-5 rounded-full border-2 border-slate-200/500 border-t-white animate-spin" />
+                      <div className="w-5 h-5 rounded-full border-2 border-slate-200/500 border-t-white animate-spin" aria-hidden="true" />
                     ) : (
-                      <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 16 16">
+                      <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 16 16" aria-hidden="true">
                         <path
                           d="M2 8h12M8 2l6 6-6 6"
                           stroke="currentColor"
