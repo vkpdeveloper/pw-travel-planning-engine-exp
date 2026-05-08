@@ -79,8 +79,10 @@ function useTypewriter(texts: string[]) {
           setCurrentText(text.substring(0, currentText.length - 1));
         }, 50); // fast delete
       } else {
-        setIsDeleting(false);
-        setCurrentIndex((prev) => (prev + 1) % texts.length);
+        timer = setTimeout(() => {
+          setIsDeleting(false);
+          setCurrentIndex((prev) => (prev + 1) % texts.length);
+        }, 50);
       }
     } else {
       if (currentText.length < text.length) {
@@ -105,10 +107,8 @@ export default function TravelAgentPage() {
   const [input, setInput] = useState("");
   const [submittedQuestions, setSubmittedQuestions] = useState<Set<string>>(new Set());
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const userProfileRef = useRef<UserProfile | null>(null);
 
   const handleProfileComplete = useCallback((profile: UserProfile) => {
-    userProfileRef.current = profile;
     setUserProfile(profile);
   }, []);
 
@@ -123,11 +123,11 @@ export default function TravelAgentPage() {
             trigger,
             messageId,
             ...body,
-            userProfile: userProfileRef.current,
+            userProfile,
           },
         }),
       }),
-    []
+    [userProfile]
   );
 
   const { messages, sendMessage, status } = useChat({
@@ -231,10 +231,6 @@ export default function TravelAgentPage() {
     },
     [input, isLoading, sendMessage]
   );
-
-  const handleSuggestion = (suggestion: string) => {
-    sendMessage({ text: suggestion });
-  };
 
   const handleQuestionSubmit = useCallback(
     (toolCallId: string, answers: Record<string, string>) => {

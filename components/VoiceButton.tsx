@@ -62,15 +62,15 @@ export function VoiceButton({ onTranscript, disabled, className }: VoiceButtonPr
   }, []);
 
   // Get or create AudioContext
-  function getAudioCtx() {
+  const getAudioCtx = useCallback(() => {
     if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
       audioCtxRef.current = new AudioContext();
     }
     return audioCtxRef.current;
-  }
+  }, []);
 
   // Play WAV buffer (base64)
-  async function playAudio(base64Wav: string) {
+  const playAudio = useCallback(async (base64Wav: string) => {
     const binary = atob(base64Wav);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -88,20 +88,20 @@ export function VoiceButton({ onTranscript, disabled, className }: VoiceButtonPr
       source.onended = () => resolve();
       source.start(0);
     });
-  }
+  }, [getAudioCtx]);
 
   // Stop any playing audio
-  function stopAudio() {
+  const stopAudio = useCallback(() => {
     try {
       currentSourceRef.current?.stop();
     } catch {
       // already stopped
     }
     currentSourceRef.current = null;
-  }
+  }, []);
 
   // Build and return a SpeechRecognition instance
-  function buildRecognition(): SpeechRecognitionInstance | null {
+  const buildRecognition = useCallback((): SpeechRecognitionInstance | null => {
     const SR =
       typeof SpeechRecognition !== "undefined"
         ? SpeechRecognition
@@ -114,7 +114,7 @@ export function VoiceButton({ onTranscript, disabled, className }: VoiceButtonPr
     rec.continuous = false;
     rec.interimResults = false;
     return rec;
-  }
+  }, []);
 
   const handleVoiceClick = useCallback(async () => {
     if (state === "speaking") {
@@ -193,7 +193,7 @@ export function VoiceButton({ onTranscript, disabled, className }: VoiceButtonPr
     };
 
     rec.start();
-  }, [state, onTranscript]);
+  }, [buildRecognition, onTranscript, playAudio, state, stopAudio]);
 
   const isActive = state !== "idle" && state !== "error";
 

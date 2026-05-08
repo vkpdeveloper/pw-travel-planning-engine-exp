@@ -60,6 +60,11 @@ export function UserOnboardingDialog({ onComplete }: UserOnboardingDialogProps) 
 
   // On mount, check localStorage
   useEffect(() => {
+    let openTimer: ReturnType<typeof setTimeout> | null = null;
+    const showDialog = () => {
+      openTimer = setTimeout(() => setOpen(true), 0);
+    };
+
     const stored = localStorage.getItem(USER_PROFILE_KEY);
     if (stored) {
       try {
@@ -67,11 +72,15 @@ export function UserOnboardingDialog({ onComplete }: UserOnboardingDialogProps) 
         onComplete(profile);
       } catch {
         localStorage.removeItem(USER_PROFILE_KEY);
-        setOpen(true);
+        showDialog();
       }
     } else {
-      setOpen(true);
+      showDialog();
     }
+
+    return () => {
+      if (openTimer) clearTimeout(openTimer);
+    };
   }, [onComplete]);
 
   // Close dropdown when clicking outside

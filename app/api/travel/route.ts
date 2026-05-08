@@ -3,14 +3,78 @@ import { streamText, tool, stepCountIs, convertToModelMessages, UIMessage } from
 import { z } from "zod";
 import { env } from "@/lib/env";
 
-const MAPS_PLACES_BASE = "https://maps.googleapis.com/maps/api/place";
+const MAPS_GEOCODE_BASE = "https://maps.googleapis.com/maps/api/geocode";
 const PLACES_V1_BASE = "https://places.googleapis.com/v1";
 const MAPS_ROUTES_BASE = "https://routes.googleapis.com/directions/v2:computeRoutes";
 const FLIGHT_BASE = "https://api.flightapi.io";
+const GEMINI_MODEL = "gemini-3.1-flash-lite";
 
 const google = createGoogleGenerativeAI({
   apiKey: env.GOOGLE_GENERATIVE_API_KEY,
-})
+});
+
+type GoogleErrorPayload = {
+  status?: string;
+  error_message?: string;
+  error?: { message?: string };
+};
+
+type GeocodeResult = {
+  formatted_address: string;
+  place_id?: string;
+  geometry: { location: { lat: number; lng: number } };
+};
+
+type GeocodeResponse = GoogleErrorPayload & {
+  results?: GeocodeResult[];
+};
+
+async function readGoogleJson<T>(res: Response, serviceName: string): Promise<T> {
+  const data = (await res.json().catch(() => null)) as (T & GoogleErrorPayload) | null;
+
+  if (!res.ok) {
+    throw new Error(`${serviceName} failed with HTTP ${res.status}: ${data?.error?.message || data?.error_message || "Unknown error"}`);
+  }
+
+  if (data?.status && data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+    throw new Error(`${serviceName} failed with status ${data.status}: ${data.error_message || "Unknown error"}`);
+  }
+
+  if (!data) {
+    throw new Error(`${serviceName} returned an invalid JSON response`);
+  }
+
+  return data as T;
+}
+
+async function geocodeLocation(query: string): Promise<{
+  coords: { lat: number; lng: number };
+  name: string;
+  placeId: string | null;
+} | null> {
+  const url = new URL(`${MAPS_GEOCODE_BASE}/json`);
+  url.searchParams.set("address", query);
+  url.searchParams.set("key", env.GOOGLE_MAPS_API_KEY);
+
+  const res = await fetch(url);
+  const data = await readGoogleJson<GeocodeResponse>(res, "Google Geocoding");
+  const result = data.results?.[0];
+
+  if (!result) return null;
+
+  return {
+    coords: result.geometry.location,
+    name: result.formatted_address,
+    placeId: result.place_id || null,
+  };
+}
+
+function formatGoogleDuration(duration = "0s") {
+  const seconds = Number.parseInt(duration.replace("s", ""), 10) || 0;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
 
 const getSystemPrompt = (userProfile?: { name?: string; location?: { displayName?: string; lat?: number; lng?: number } } | null) => {
   const now = new Date();
@@ -111,20 +175,9 @@ const calculateRoute = tool({
   }),
   execute: async ({ origin, destination, originIata, destinationIata }) => {
     try {
-      // --- Step 1: Geocode both locations via Places Text Search ---
-      const geocode = async (query: string) => {
-        const res = await fetch(
-          `${MAPS_PLACES_BASE}/textsearch/json?query=${encodeURIComponent(query)}&key=${env.GOOGLE_MAPS_API_KEY}`
-        ).then((r) => r.json());
-        const place = res.results?.[0];
-        return place
-          ? { coords: place.geometry.location as { lat: number; lng: number }, name: place.name as string }
-          : null;
-      };
-
       const [originPlace, destPlace] = await Promise.all([
-        geocode(originIata ? `${originIata} Airport` : origin),
-        geocode(destinationIata ? `${destinationIata} Airport` : destination),
+        geocodeLocation(originIata ? `${originIata} Airport` : origin),
+        geocodeLocation(destinationIata ? `${destinationIata} Airport` : destination),
       ]);
 
       if (!originPlace || !destPlace) {
@@ -170,7 +223,7 @@ const calculateRoute = tool({
       } else {
         // --- Step 3: Try Routes API for ground routes ---
         try {
-          const routesRes = await fetch(MAPS_ROUTES_BASE, {
+          const routesResponse = await fetch(MAPS_ROUTES_BASE, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -179,11 +232,23 @@ const calculateRoute = tool({
                 "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline",
             },
             body: JSON.stringify({
-              origin: { address: originPlace.name },
-              destination: { address: destPlace.name },
+              origin: originPlace.placeId
+                ? { placeId: originPlace.placeId }
+                : { location: { latLng: { latitude: originCoords.lat, longitude: originCoords.lng } } },
+              destination: destPlace.placeId
+                ? { placeId: destPlace.placeId }
+                : { location: { latLng: { latitude: destCoords.lat, longitude: destCoords.lng } } },
               travelMode: "DRIVE",
             }),
-          }).then((r) => r.json());
+          });
+
+          const routesRes = await readGoogleJson<{
+            routes?: Array<{
+              duration?: string;
+              distanceMeters?: number;
+              polyline?: { encodedPolyline?: string };
+            }>;
+          }>(routesResponse, "Google Routes");
 
           const route = routesRes.routes?.[0];
           if (route) {
@@ -192,15 +257,13 @@ const calculateRoute = tool({
             const dKm = Math.round(dMeters / 1000);
             const dMi = Math.round(dKm * 0.621371);
             distance = `${dKm.toLocaleString()} km (${dMi.toLocaleString()} mi)`;
-            const dSecs = parseInt((route.duration || "0s").replace("s", ""), 10);
-            const dHours = Math.floor(dSecs / 3600);
-            const dMins = Math.round((dSecs % 3600) / 60);
-            duration = dHours > 0 ? `${dHours}h ${dMins}m drive` : `${dMins}m drive`;
+            duration = `${formatGoogleDuration(route.duration)} drive`;
             isFlightRoute = false;
           } else {
             duration = `~${Math.round(distKm / 60)} min drive`;
           }
-        } catch {
+        } catch (error) {
+          console.error("calculateRoute routes API error:", error);
           duration = `~${Math.round(distKm / 60)} min drive`;
         }
       }
@@ -211,6 +274,8 @@ const calculateRoute = tool({
       return {
         origin: originPlace.name,
         destination: destPlace.name,
+        originPlaceId: originPlace.placeId,
+        destinationPlaceId: destPlace.placeId,
         originIata: originIata || null,
         destinationIata: destinationIata || null,
         originCoords,
@@ -305,17 +370,10 @@ const findPlaces = tool({
         }),
       });
 
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        return {
-          error: "places_api_error",
-          message: `Places search failed (${res.status}): ${errText.slice(0, 200)}`,
-          destination,
-          category,
-        };
-      }
-
-      const data = (await res.json()) as { places?: Array<Record<string, unknown>> };
+      const data = await readGoogleJson<{ places?: Array<Record<string, unknown>> }>(
+        res,
+        "Google Places"
+      );
       const places = (data.places || []).slice(0, maxResults).map((p) => {
         const photos = (p.photos as Array<{ name: string; widthPx?: number; heightPx?: number }> | undefined) || [];
         const photoUrls = photos.slice(0, 3).map(
@@ -390,12 +448,26 @@ const optimizeItinerary = tool({
   }),
   execute: async ({ stops, travelMode }) => {
     try {
+      const resolvedStops = await Promise.all(
+        stops.map(async (stop) => {
+          if (stop.placeId) return stop;
+
+          try {
+            const geocoded = await geocodeLocation(stop.name);
+            return { ...stop, placeId: geocoded?.placeId || undefined };
+          } catch (error) {
+            console.error("optimizeItinerary geocode fallback error:", error);
+            return stop;
+          }
+        })
+      );
+
       const toWaypoint = (s: { placeId?: string; name: string }) =>
         s.placeId ? { placeId: s.placeId } : { address: s.name };
 
-      const origin = toWaypoint(stops[0]);
-      const destination = toWaypoint(stops[stops.length - 1]);
-      const intermediates = stops.slice(1, -1).map(toWaypoint);
+      const origin = toWaypoint(resolvedStops[0]);
+      const destination = toWaypoint(resolvedStops[resolvedStops.length - 1]);
+      const intermediates = resolvedStops.slice(1, -1).map(toWaypoint);
       const canOptimize = intermediates.length >= 2;
 
       const body: Record<string, unknown> = {
@@ -438,7 +510,7 @@ const optimizeItinerary = tool({
         };
       }
 
-      const data = (await res.json()) as {
+      const data = await readGoogleJson<{
         routes?: Array<{
           duration?: string;
           distanceMeters?: number;
@@ -451,7 +523,7 @@ const optimizeItinerary = tool({
           }>;
           optimizedIntermediateWaypointIndex?: number[];
         }>;
-      };
+      }>(res, "Google Routes");
 
       const route = data.routes?.[0];
       if (!route) {
@@ -460,32 +532,24 @@ const optimizeItinerary = tool({
 
       // Build the optimized stop order
       const optimizedIndex = route.optimizedIntermediateWaypointIndex || [];
-      const orderedStops: typeof stops = [stops[0]];
+      const orderedStops: typeof resolvedStops = [resolvedStops[0]];
       if (optimizedIndex.length > 0) {
         // Indices are 0-based into the original intermediates array
         for (const idx of optimizedIndex) {
-          orderedStops.push(stops[idx + 1]);
+          orderedStops.push(resolvedStops[idx + 1]);
         }
       } else {
-        for (let i = 1; i < stops.length - 1; i++) orderedStops.push(stops[i]);
+        for (let i = 1; i < resolvedStops.length - 1; i++) orderedStops.push(resolvedStops[i]);
       }
-      orderedStops.push(stops[stops.length - 1]);
-
-      const fmtDur = (sec: number) => {
-        const h = Math.floor(sec / 3600);
-        const m = Math.round((sec % 3600) / 60);
-        return h > 0 ? `${h}h ${m}m` : `${m}m`;
-      };
-      const totalSec = parseInt((route.duration || "0s").replace("s", ""), 10);
+      orderedStops.push(resolvedStops[resolvedStops.length - 1]);
       const totalMeters = route.distanceMeters || 0;
 
       const legs = (route.legs || []).map((leg, i) => {
-        const sec = parseInt((leg.duration || "0s").replace("s", ""), 10);
         const meters = leg.distanceMeters || 0;
         return {
           from: orderedStops[i].name,
           to: orderedStops[i + 1].name,
-          duration: fmtDur(sec),
+          duration: formatGoogleDuration(leg.duration),
           distanceKm: Math.round(meters / 100) / 10,
           startLocation: leg.startLocation?.latLng,
           endLocation: leg.endLocation?.latLng,
@@ -496,10 +560,11 @@ const optimizeItinerary = tool({
         success: true,
         travelMode,
         wasReordered: optimizedIndex.length > 0,
-        totalDuration: fmtDur(totalSec),
+        totalDuration: formatGoogleDuration(route.duration),
         totalDistanceKm: Math.round(totalMeters / 100) / 10,
         encodedPolyline: route.polyline?.encodedPolyline || null,
         orderedStops: orderedStops.map((s) => s.name),
+        stopPlaceIds: orderedStops.map((s) => s.placeId || null),
         legs,
       };
     } catch (error) {
@@ -692,7 +757,7 @@ export async function POST(req: Request) {
   } = await req.json();
 
   const result = streamText({
-    model: google("gemini-3-flash-preview"),
+    model: google(GEMINI_MODEL),
     system: getSystemPrompt(userProfile),
     messages: await convertToModelMessages(messages),
     tools: {

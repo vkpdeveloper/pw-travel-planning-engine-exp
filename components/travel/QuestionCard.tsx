@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 export interface CardQuestion {
@@ -31,10 +31,7 @@ export function QuestionCard({
   const [focused, setFocused] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(isSubmitted);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-
-  useEffect(() => {
-    if (isSubmitted) setSubmitted(true);
-  }, [isSubmitted]);
+  const hasSubmitted = submitted || isSubmitted;
 
   const handleChange = (id: string, value: string) => {
     setAnswers((prev) => ({ ...prev, [id]: value }));
@@ -58,7 +55,7 @@ export function QuestionCard({
     onSubmit(answers);
   };
 
-  if (submitted) {
+  if (hasSubmitted) {
     return (
       <div className="max-w-xl rounded-2xl border border-slate-200 bg-white px-4 py-3">
         <p className="text-slate-700 text-sm font-medium">Answers submitted</p>

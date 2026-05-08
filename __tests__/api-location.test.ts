@@ -7,6 +7,13 @@ const okResponse = (body: unknown): Response =>
     json: async () => body,
   }) as unknown as Response;
 
+const errorResponse = (status: number, body: unknown): Response =>
+  ({
+    ok: false,
+    status,
+    json: async () => body,
+  }) as unknown as Response;
+
 const makeReq = (body: unknown) =>
   new Request("http://test/api/location", {
     method: "POST",
@@ -112,17 +119,19 @@ describe("POST /api/location", () => {
 
   describe("places search", () => {
     it("returns up to 5 mapped results", async () => {
-      const results = Array.from({ length: 7 }, (_, i) => ({
-        name: `Place ${i}`,
-        formatted_address: `${i} Main St`,
-        geometry: { location: { lat: i, lng: i } },
+      const places = Array.from({ length: 5 }, (_, i) => ({
+        id: `place-${i}`,
+        displayName: { text: `Place ${i}` },
+        formattedAddress: `${i} Main St`,
+        location: { latitude: i, longitude: i },
       }));
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(okResponse({ status: "OK", results }));
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(okResponse({ places }));
 
       const res = await POST(makeReq({ type: "search", query: "coffee" }));
       const data = await res.json();
       expect(data.results).toHaveLength(5);
       expect(data.results[0]).toEqual({
+        placeId: "place-0",
         displayName: "Place 0",
         fullAddress: "0 Main St",
         lat: 0,
@@ -139,10 +148,21 @@ describe("POST /api/location", () => {
     });
 
     it("handles missing results array as empty", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(okResponse({ status: "OK" }));
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(okResponse({}));
       const res = await POST(makeReq({ type: "search", query: "x" }));
       const data = await res.json();
       expect(data).toEqual({ results: [] });
+    });
+
+    it("returns 500 when Google Places returns an API error", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        errorResponse(403, { error: { message: "API key not authorized" } }),
+      );
+
+      const res = await POST(makeReq({ type: "search", query: "x" }));
+      expect(res.status).toBe(500);
+      const data = await res.json();
+      expect(data).toEqual({ error: "Search failed" });
     });
 
     it("returns 500 when fetch throws", async () => {

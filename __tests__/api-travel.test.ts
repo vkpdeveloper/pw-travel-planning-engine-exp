@@ -48,6 +48,7 @@ describe("POST /api/travel", () => {
     expect(streamTextMock).toHaveBeenCalledTimes(1);
     const arg = streamTextMock.mock.calls[0][0];
     expect(arg.messages).toEqual(messages);
+    expect(arg.model).toEqual({ model: "gemini-3.1-flash-lite" });
     expect(arg.system).toContain("Alex");
     expect(arg.system).toContain("NYC");
     expect(arg.tools).toMatchObject({

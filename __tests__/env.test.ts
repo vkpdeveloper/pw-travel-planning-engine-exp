@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const VALID_ENV = {
   GOOGLE_GENERATIVE_API_KEY: "test-gen-key",
   GOOGLE_MAPS_API_KEY: "test-maps-key",
+  GOOGLE_MAPS_MAP_ID: "test-map-id",
   FLIGHTS_API_KEY: "test-flights-key",
   NODE_ENV: "test",
 };
@@ -25,6 +26,7 @@ describe("lib/env", () => {
     const { env } = await import("@/lib/env");
     expect(env.GOOGLE_GENERATIVE_API_KEY).toBe("test-gen-key");
     expect(env.GOOGLE_MAPS_API_KEY).toBe("test-maps-key");
+    expect(env.GOOGLE_MAPS_MAP_ID).toBe("test-map-id");
     expect(env.FLIGHTS_API_KEY).toBe("test-flights-key");
     expect(env.NODE_ENV).toBe("test");
   });

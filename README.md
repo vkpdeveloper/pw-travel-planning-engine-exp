@@ -2,6 +2,37 @@
 
 An AI-powered travel assistant that takes a natural-language trip description and turns it into a full travel experience: interactive follow-up questions, an animated map, real-time flight search, and a vivid narrative description of the journey — all streamed live in the browser.
 
+**Built using Google AI Gemini Models.**  
+**Using Antigravity.**
+
+---
+
+## Powered by Google AI & Google Cloud
+
+This platform is built from the ground up on Google's world-class AI and cloud infrastructure. Every intelligent interaction, every map visualization, and every deployment pipeline is made possible by Google's cutting-edge services:
+
+### Google AI Gemini
+The heart and soul of TravelMind is **Google's Gemini AI** (`gemini-3.1-flash-lite`). Gemini powers our multi-step travel agent with extraordinary natural language understanding — it doesn't just parse queries, it *comprehends intent*. From deciphering vague travel wishes like "I want to go somewhere warm next month" to generating structured, context-aware follow-up questions, Gemini operates with remarkable speed and intelligence. It crafts vivid, sensory-rich travel narratives that stream live to users, making every trip feel real before a single ticket is booked. Google's Gemini represents the gold standard in accessible, high-performance AI, enabling us to deliver a conversational experience that feels genuinely human.
+
+### Google Maps Platform
+Our entire geospatial layer is powered by the comprehensive **Google Maps Platform**, delivering unparalleled location intelligence:
+
+- **Google Maps JavaScript API** — Renders our stunning, dark-themed interactive maps with Advanced Markers and cloud-based styling. The smooth animations, rotating plane icons, and progressive route drawing create a cinematic travel planning experience directly in the browser.
+- **Google Geocoding API** — Instantly resolves free-text city names into precise geographic coordinates with Google's unmatched global place database. Whether it's a major metropolis or a hidden gem, Geocoding delivers accurate location data every time.
+- **Google Places API v1** — Unlocks Google's vast repository of place knowledge, enabling rich destination context and discovery capabilities.
+- **Google Routes API v2** — Computes optimized, real-world road directions with stable place IDs and encoded polylines. For shorter journeys, it provides actual drivable routes rather than simple straight-line distances, giving users realistic travel expectations.
+
+Together, these APIs form the most comprehensive mapping solution available, trusted by billions of users worldwide.
+
+### Google Cloud Platform
+Our entire infrastructure runs on **Google Cloud**, leveraging enterprise-grade reliability and performance:
+
+- **Google Cloud Run** — Provides our serverless, auto-scaling container deployment. Cloud Run handles traffic spikes effortlessly, scales to zero when idle to optimize costs, and ensures our travel agent is always available with Google's global network backbone.
+- **Google Cloud Build** — Powers our CI/CD pipeline with high-performance build machines (`E2_HIGHCPU_8`), enabling rapid, reliable container builds and deployments.
+- **Google Maps Platform Map Management** — Cloud-managed map styling and configuration ensures consistent, beautiful map experiences across all user sessions.
+
+By building on Google Cloud, we inherit the same infrastructure that powers Google's own products — world-class security, global availability, and infinite scalability. Google's ecosystem doesn't just support our platform; it elevates every aspect of the user experience.
+
 ---
 
 ## What It Does
@@ -26,7 +57,7 @@ An AI-powered travel assistant that takes a natural-language trip description an
 | AI SDK | **Vercel AI SDK v6** | Streaming text, tool calls, multi-step agent loops |
 | AI Model | **Google Gemini** (`gemini-3.1-flash-lite`) | Fast, cheap, multimodal-capable |
 | Maps (client) | **Google Maps JS API** | Interactive animated route rendering |
-| Maps (server) | Google Places Text Search + Routes API v2 | Geocoding and road directions |
+| Maps (server) | Google Geocoding API + Places API v1 + Routes API v2 | Location lookup, place discovery, and optimized directions |
 | Flight Data | **FlightAPI.io** | Real-time one-way flight search |
 | Styling | **Tailwind CSS v4** | Utility-first, no config file needed in v4 |
 | Components | **shadcn/ui** (radix-maia style) | Accessible, composable, unstyled primitives |
@@ -41,7 +72,7 @@ An AI-powered travel assistant that takes a natural-language trip description an
 ```
 warm-up/
 ├── app/
-│   ├── api/travel/route.ts     # POST endpoint — AI agent with 3 tools
+│   ├── api/travel/route.ts     # POST endpoint — AI agent with travel and Google service tools
 │   ├── globals.css             # Tailwind v4 + shadcn CSS vars (OKLCH, dark mode)
 │   ├── layout.tsx              # Root layout: Inter, Public Sans, Geist fonts
 │   └── page.tsx                # Single-page app: entire chat UI
@@ -70,17 +101,18 @@ warm-up/
 ### Prerequisites
 
 - [Bun](https://bun.sh) installed
-- A `.env` file at the project root with all three required keys
+- A `.env` file at the project root with all required keys
 
 ### Environment Variables
 
 ```env
 GOOGLE_GENERATIVE_API_KEY=   # Gemini API key (Google AI Studio)
-GOOGLE_MAPS_API_KEY=         # Maps JS API + Places API + Routes API enabled
+GOOGLE_MAPS_API_KEY=         # Maps JS API + Geocoding API + Places API v1 + Routes API enabled
+GOOGLE_MAPS_MAP_ID=          # JavaScript Map ID from Google Maps Platform Map Management
 FLIGHTS_API_KEY=             # FlightAPI.io key
 ```
 
-All three are validated at startup by `lib/env.ts`. The app will throw and refuse to start if any are missing or empty.
+All required variables are validated at startup by `lib/env.ts`. The app will throw and refuse to start if any are missing or empty.
 
 ### Run
 
@@ -144,9 +176,9 @@ v6 uses a `parts` array on each message instead of flat tool invocations. Tool c
 
 Route type is determined by distance:
 - **> 500 km** → treat as a flight. Distance is computed with the **Haversine formula** (great-circle), duration estimated at 900 km/h cruise speed. The map draws a smooth bezier arc with a plane emoji that rotates to match the bearing.
-- **≤ 500 km** → treat as driveable. The **Google Routes API v2** is queried for the actual road route, returning an encoded polyline that is decoded and drawn on the map.
+- **≤ 500 km** → treat as driveable. Locations are resolved with the **Google Geocoding API**, then the **Google Routes API v2** is queried with stable place IDs when available. The returned encoded polyline is decoded and drawn on the map.
 
-The map uses a custom **dark style** palette (navy/dark blue tones) and is dynamically imported (`next/dynamic`, `ssr: false`) because it depends on the `window` object and the Google Maps global.
+The map uses a configured Google Maps **Map ID** for Advanced Markers and cloud styling, and is dynamically imported (`next/dynamic`, `ssr: false`) because it depends on the `window` object and the Google Maps global.
 
 Animation is a `requestAnimationFrame` loop that progressively draws the polyline/arc over ~2800ms at 30fps, giving the feeling of a live route being traced.
 

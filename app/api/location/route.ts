@@ -1,7 +1,46 @@
 import { env } from "@/lib/env";
 
 const MAPS_GEOCODE_BASE = "https://maps.googleapis.com/maps/api/geocode";
-const MAPS_PLACES_BASE = "https://maps.googleapis.com/maps/api/place";
+const PLACES_V1_BASE = "https://places.googleapis.com/v1";
+
+type GeocodeResult = {
+  formatted_address: string;
+  place_id?: string;
+  address_components: Array<{
+    long_name: string;
+    short_name: string;
+    types: string[];
+  }>;
+  geometry: { location: { lat: number; lng: number } };
+};
+
+type GeocodeResponse = {
+  results?: GeocodeResult[];
+  status: string;
+  error_message?: string;
+};
+
+async function readGoogleJson<T>(res: Response, serviceName: string): Promise<T> {
+  const data = (await res.json().catch(() => null)) as (T & {
+    status?: string;
+    error_message?: string;
+    error?: { message?: string };
+  }) | null;
+
+  if (!res.ok) {
+    throw new Error(`${serviceName} failed with HTTP ${res.status}: ${data?.error?.message || data?.error_message || "Unknown error"}`);
+  }
+
+  if (data?.status && data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+    throw new Error(`${serviceName} failed with status ${data.status}: ${data.error_message || "Unknown error"}`);
+  }
+
+  if (!data) {
+    throw new Error(`${serviceName} returned an invalid JSON response`);
+  }
+
+  return data as T;
+}
 
 export async function POST(req: Request) {
   const body = await req.json();
@@ -13,18 +52,7 @@ export async function POST(req: Request) {
       const res = await fetch(
         `${MAPS_GEOCODE_BASE}/json?latlng=${lat},${lng}&result_type=locality|administrative_area_level_1|country&key=${env.GOOGLE_MAPS_API_KEY}`
       );
-      const data = (await res.json()) as {
-        results: Array<{
-          formatted_address: string;
-          address_components: Array<{
-            long_name: string;
-            short_name: string;
-            types: string[];
-          }>;
-          geometry: { location: { lat: number; lng: number } };
-        }>;
-        status: string;
-      };
+      const data = await readGoogleJson<GeocodeResponse>(res, "Google Geocoding");
 
       if (data.status !== "OK" || !data.results?.length) {
         return Response.json({ error: "No results found" }, { status: 404 });
@@ -64,23 +92,39 @@ export async function POST(req: Request) {
       return Response.json({ results: [] });
     }
     try {
-      const res = await fetch(
-        `${MAPS_PLACES_BASE}/textsearch/json?query=${encodeURIComponent(query)}&key=${env.GOOGLE_MAPS_API_KEY}`
-      );
-      const data = (await res.json()) as {
-        results: Array<{
-          name: string;
-          formatted_address: string;
-          geometry: { location: { lat: number; lng: number } };
+      const res = await fetch(`${PLACES_V1_BASE}/places:searchText`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": env.GOOGLE_MAPS_API_KEY,
+          "X-Goog-FieldMask": [
+            "places.id",
+            "places.displayName",
+            "places.formattedAddress",
+            "places.location",
+          ].join(","),
+        },
+        body: JSON.stringify({
+          textQuery: query.trim(),
+          pageSize: 5,
+          languageCode: "en",
+        }),
+      });
+      const data = await readGoogleJson<{
+        places?: Array<{
+          id: string;
+          displayName?: { text?: string };
+          formattedAddress?: string;
+          location?: { latitude: number; longitude: number };
         }>;
-        status: string;
-      };
+      }>(res, "Google Places");
 
-      const results = (data.results || []).slice(0, 5).map((r) => ({
-        displayName: r.name,
-        fullAddress: r.formatted_address,
-        lat: r.geometry.location.lat,
-        lng: r.geometry.location.lng,
+      const results = (data.places || []).map((place) => ({
+        placeId: place.id,
+        displayName: place.displayName?.text || "Unknown place",
+        fullAddress: place.formattedAddress || "",
+        lat: place.location?.latitude,
+        lng: place.location?.longitude,
       }));
 
       return Response.json({ results });

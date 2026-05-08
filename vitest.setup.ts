@@ -6,6 +6,7 @@ import { cleanup } from "@testing-library/react";
 // Tests that exercise env validation override these via `process.env = ...` + `vi.resetModules()`.
 process.env.GOOGLE_GENERATIVE_API_KEY ||= "test-gen-key";
 process.env.GOOGLE_MAPS_API_KEY ||= "test-maps-key";
+process.env.GOOGLE_MAPS_MAP_ID ||= "test-map-id";
 process.env.FLIGHTS_API_KEY ||= "test-flights-key";
 
 afterEach(() => {

@@ -131,14 +131,16 @@ export function AnimatedMap({
   const mapRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
+  const configError = !apiKey
+    ? "Google Maps API key not configured"
+    : !mapId
+    ? "Google Maps Map ID not configured"
+    : null;
 
   useEffect(() => {
-    if (!mapRef.current) return;
-
-    if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
-      setError("Google Maps API key not configured");
-      return;
-    }
+    if (!mapRef.current || configError) return;
 
     let animationFrame: number;
     let isMounted = true;
@@ -167,13 +169,6 @@ export function AnimatedMap({
         else if (maxDiff > 5) zoom = 6;
         else if (maxDiff > 2) zoom = 7;
         else zoom = 9;
-
-        const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
-
-        if (!mapId) {
-          setError("Google Maps Map ID not configured");
-          return;
-        }
 
         const map = new Map(mapRef.current!, {
           center: centerCoords,
@@ -367,7 +362,7 @@ export function AnimatedMap({
       isMounted = false;
       if (animationFrame) cancelAnimationFrame(animationFrame);
     };
-  }, [originCoords, destCoords, centerCoords, encodedPolyline, isFlightRoute, origin, destination]);
+  }, [originCoords, destCoords, centerCoords, encodedPolyline, isFlightRoute, origin, destination, configError, mapId]);
 
   return (
     <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
@@ -387,13 +382,13 @@ export function AnimatedMap({
           </div>
         </div>
 
-        {error && (
+        {(error || configError) && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/95">
-            <p className="text-red-600 text-sm">{error}</p>
+            <p className="text-red-600 text-sm">{error || configError}</p>
           </div>
         )}
 
-        {!loaded && !error && (
+        {!loaded && !error && !configError && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80">
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 rounded-full border-[1.5px] border-slate-300 border-t-indigo-500 animate-spin" />
