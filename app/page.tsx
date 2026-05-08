@@ -362,16 +362,18 @@ export default function TravelAgentPage() {
                             </div>
                           );
                         }
-                        if (part.type === "dynamic-tool") {
+                        if (part.type === "dynamic-tool" || part.type.startsWith("tool-")) {
                           const toolPart = part as {
-                            type: "dynamic-tool";
-                            toolName: string;
+                            type: string;
+                            toolName?: string;
                             toolCallId: string;
                             state: string;
                             input: unknown;
                             output?: unknown;
                           };
-                          const { toolName, toolCallId, state, input: toolInput, output } = toolPart;
+                          const toolName =
+                            toolPart.toolName ?? part.type.replace(/^tool-/, "");
+                          const { toolCallId, state, input: toolInput, output } = toolPart;
                           const mappedState = mapToolState(state);
 
                           if (toolName === "askFollowUpQuestions") {
