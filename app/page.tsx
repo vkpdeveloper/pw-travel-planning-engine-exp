@@ -13,7 +13,6 @@ import { FlightResults, FlightLoadingSkeleton } from "@/components/travel/Flight
 import { QuestionCard, QuestionCardSkeleton } from "@/components/travel/QuestionCard";
 import { PlaceCards, PlaceCardsLoadingSkeleton } from "@/components/travel/PlaceCards";
 import { ItineraryRoute } from "@/components/travel/ItineraryRoute";
-import { AerialVideo } from "@/components/travel/AerialVideo";
 import type { AnimatedMapProps } from "@/components/travel/AnimatedMap";
 import { UserOnboardingDialog, type UserProfile } from "@/components/travel/UserOnboardingDialog";
 import { VoiceButton } from "@/components/VoiceButton";
@@ -483,24 +482,6 @@ export default function TravelAgentPage() {
                                 {state === "output-available" && !!output && (
                                   <ItineraryRoute
                                     data={output as Parameters<typeof ItineraryRoute>[0]["data"]}
-                                  />
-                                )}
-                              </div>
-                            );
-                          }
-
-                          if (toolName === "aerialView") {
-                            return (
-                              <div key={partIdx} className="space-y-3">
-                                <ToolCallStatus
-                                  toolName={toolName}
-                                  state={mappedState}
-                                  input={toolInput}
-                                  output={output}
-                                />
-                                {state === "output-available" && !!output && (
-                                  <AerialVideo
-                                    data={output as Parameters<typeof AerialVideo>[0]["data"]}
                                   />
                                 )}
                               </div>

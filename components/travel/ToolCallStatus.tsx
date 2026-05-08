@@ -68,21 +68,6 @@ const TOOL_META: Record<
       return "Itinerary ready";
     },
   },
-  aerialView: {
-    label: (input) => {
-      const i = input as { address?: string } | undefined;
-      if (i?.address) return `Loading aerial view: ${i.address.split(",")[0]}`;
-      return "Loading aerial view";
-    },
-    resultLabel: (output) => {
-      const o = output as
-        | { videoUrl?: string | null; error?: string; message?: string }
-        | undefined;
-      if (o?.error) return o.message || "Aerial view unavailable";
-      if (o?.videoUrl) return "Aerial view ready";
-      return "Rendering aerial view";
-    },
-  },
   searchFlights: {
     label: (input) => {
       const i = input as
@@ -129,7 +114,19 @@ export function ToolCallStatus({ toolName, state, input, output }: ToolStatusPro
           className="w-3 h-3 rounded-full border-[1.5px] border-slate-300 border-t-indigo-500 animate-spin"
         />
       ) : isError ? (
-        <span aria-hidden="true" className="w-3 h-3 rounded-full bg-red-400" />
+        <svg
+          aria-hidden="true"
+          className="w-3 h-3 text-slate-400"
+          fill="none"
+          viewBox="0 0 12 12"
+        >
+          <path
+            d="M3 3l6 6M9 3l-6 6"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+          />
+        </svg>
       ) : (
         <svg
           aria-hidden="true"
@@ -146,7 +143,7 @@ export function ToolCallStatus({ toolName, state, input, output }: ToolStatusPro
           />
         </svg>
       )}
-      <span className={cn("font-medium", isError ? "text-red-600" : "text-slate-600")}>
+      <span className={cn("font-medium", isError ? "text-slate-500" : "text-slate-600")}>
         {label}
       </span>
     </div>

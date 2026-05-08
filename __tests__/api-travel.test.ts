@@ -56,7 +56,6 @@ describe("POST /api/travel", () => {
       searchFlights: expect.any(Object),
       findPlaces: expect.any(Object),
       optimizeItinerary: expect.any(Object),
-      aerialView: expect.any(Object),
     });
   });
 

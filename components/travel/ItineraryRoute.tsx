@@ -11,7 +11,7 @@ export interface ItineraryLeg {
 
 export interface ItineraryData {
   success?: boolean;
-  travelMode?: "DRIVE" | "WALK" | "BICYCLE" | "TRANSIT";
+  travelMode?: "DRIVE" | "WALK" | "BICYCLE";
   wasReordered?: boolean;
   totalDuration?: string;
   totalDistanceKm?: number;
@@ -26,17 +26,10 @@ const MODE_LABEL: Record<string, string> = {
   DRIVE: "Driving",
   WALK: "Walking",
   BICYCLE: "Cycling",
-  TRANSIT: "Transit",
 };
 
 export function ItineraryRoute({ data }: { data: ItineraryData }) {
-  if (data.error) {
-    return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
-        <p className="text-sm text-red-700">{data.message || "Could not optimize itinerary."}</p>
-      </div>
-    );
-  }
+  if (data.error) return null;
   if (!data.orderedStops || !data.legs) return null;
 
   const modeLabel = MODE_LABEL[data.travelMode || "DRIVE"];

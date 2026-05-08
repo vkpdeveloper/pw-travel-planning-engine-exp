@@ -6,7 +6,6 @@ import { env } from "@/lib/env";
 const MAPS_PLACES_BASE = "https://maps.googleapis.com/maps/api/place";
 const PLACES_V1_BASE = "https://places.googleapis.com/v1";
 const MAPS_ROUTES_BASE = "https://routes.googleapis.com/directions/v2:computeRoutes";
-const AERIAL_VIEW_BASE = "https://aerialview.googleapis.com/v1";
 const FLIGHT_BASE = "https://api.flightapi.io";
 
 const google = createGoogleGenerativeAI({
@@ -52,9 +51,8 @@ Everything in \`question\`, \`placeholder\`, and \`options\` is shown verbatim t
 3. **Calculate the route** — call \`calculateRoute\` with origin and destination to get real distance, duration, and map data.
 4. **Search flights** — call \`searchFlights\` with the IATA airport codes, date, and passenger info.
 5. **Discover places** — call \`findPlaces\` with the destination and a category like "top attractions", "best restaurants", or "boutique hotels" to surface ratings, photos, opening hours, and price levels for the user.
-6. **Build an optimized day plan** — once you have 3+ interesting places, call \`optimizeItinerary\` with their place IDs to compute the best visit order with travel times between stops.
-7. **Show the destination cinematically** — call \`aerialView\` with a hero location (the destination city or a marquee landmark) so the user gets a stunning 3D fly-through.
-8. **Describe the experience** — after tools complete, write a vivid, streaming narrative tying together the photos, ratings, and itinerary you just surfaced. Make it feel personal and inspiring.
+6. **Build an optimized day plan** — once you have 3+ interesting places, call \`optimizeItinerary\` with their place IDs to compute the best visit order with travel times between stops. Use \`DRIVE\` for city-to-city, \`WALK\` for compact neighborhoods. (Transit is not supported for multi-stop optimization.)
+7. **Describe the experience** — after tools complete, write a vivid, streaming narrative tying together the photos, ratings, and itinerary you just surfaced. Make it feel personal and inspiring.
 
 ## Tone
 - Warm, conversational, and genuinely excited about travel
@@ -386,9 +384,9 @@ const optimizeItinerary = tool({
       .max(10)
       .describe("Ordered list of stops; first is start, last is end. Intermediates are reordered."),
     travelMode: z
-      .enum(["DRIVE", "WALK", "BICYCLE", "TRANSIT"])
+      .enum(["DRIVE", "WALK", "BICYCLE"])
       .default("DRIVE")
-      .describe("Mode of travel between stops"),
+      .describe("Mode of travel between stops. Transit is not supported because the Routes API does not allow intermediate waypoints in transit mode."),
   }),
   execute: async ({ stops, travelMode }) => {
     try {
@@ -433,9 +431,10 @@ const optimizeItinerary = tool({
 
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
+        console.error("optimizeItinerary routes API error:", res.status, errText);
         return {
           error: "routes_api_error",
-          message: `Itinerary optimization failed (${res.status}): ${errText.slice(0, 200)}`,
+          message: "We couldn't build an optimized route between these stops. Try a different travel mode or fewer stops.",
         };
       }
 
@@ -508,86 +507,6 @@ const optimizeItinerary = tool({
       return {
         error: "fetch_failed",
         message: "Unable to optimize itinerary at this time.",
-      };
-    }
-  },
-});
-
-// --- Tool: Aerial View (cinematic 3D fly-through) ---
-const aerialView = tool({
-  description:
-    "Fetch a cinematic 3D aerial fly-through video for a landmark or address using the Google Aerial View API. Use sparingly — once per response — for the destination's hero location.",
-  inputSchema: z.object({
-    address: z
-      .string()
-      .describe("Full address or famous landmark name (e.g. 'Eiffel Tower, Paris, France')"),
-  }),
-  execute: async ({ address }) => {
-    try {
-      const lookup = async () => {
-        const url = `${AERIAL_VIEW_BASE}/videos:lookupVideo?address=${encodeURIComponent(
-          address
-        )}&key=${env.GOOGLE_MAPS_API_KEY}`;
-        const r = await fetch(url);
-        if (!r.ok) return null;
-        return (await r.json()) as {
-          state?: string;
-          uris?: Record<string, { landscapeUri?: string; portraitUri?: string }>;
-        };
-      };
-
-      let result = await lookup();
-
-      // If video not yet rendered, request render and return placeholder
-      if (!result || result.state !== "ACTIVE") {
-        const renderRes = await fetch(`${AERIAL_VIEW_BASE}/videos:renderVideo`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": env.GOOGLE_MAPS_API_KEY,
-          },
-          body: JSON.stringify({ address }),
-        });
-
-        if (renderRes.ok) {
-          // Re-poll once after a short delay; if still not ready, return processing state
-          await new Promise((r) => setTimeout(r, 1500));
-          result = await lookup();
-        }
-      }
-
-      if (!result) {
-        return {
-          error: "aerial_unavailable",
-          message: `Aerial View is not available for "${address}".`,
-          address,
-        };
-      }
-
-      const uris = result.uris || {};
-      const mp4Landscape =
-        uris["VIDEO_FORMAT_MP4_HIGH"]?.landscapeUri ||
-        uris["VIDEO_FORMAT_MP4_MEDIUM"]?.landscapeUri ||
-        uris["VIDEO_FORMAT_MP4_LOW"]?.landscapeUri ||
-        null;
-      const thumbnail =
-        uris["IMAGE_FORMAT_JPEG"]?.landscapeUri ||
-        uris["THUMBNAIL"]?.landscapeUri ||
-        null;
-
-      return {
-        success: true,
-        address,
-        state: result.state || "PROCESSING",
-        videoUrl: mp4Landscape,
-        thumbnailUrl: thumbnail,
-      };
-    } catch (error) {
-      console.error("aerialView error:", error);
-      return {
-        error: "fetch_failed",
-        message: "Unable to load aerial view.",
-        address,
       };
     }
   },
@@ -752,7 +671,6 @@ export async function POST(req: Request) {
       searchFlights,
       findPlaces,
       optimizeItinerary,
-      aerialView,
     },
     stopWhen: stepCountIs(100),
     maxOutputTokens: 12000,

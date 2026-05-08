@@ -116,36 +116,6 @@ function calculateBearing(from: Coords, to: Coords): number {
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
-const DARK_STYLE: google.maps.MapTypeStyle[] = [
-  { elementType: "geometry", stylers: [{ color: "#0f172a" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#8b9db5" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#0f172a" }] },
-  {
-    featureType: "administrative.country",
-    elementType: "geometry.stroke",
-    stylers: [{ color: "#334155" }],
-  },
-  {
-    featureType: "landscape.natural",
-    elementType: "geometry",
-    stylers: [{ color: "#0d1b2e" }],
-  },
-  {
-    featureType: "road",
-    elementType: "geometry",
-    stylers: [{ color: "#1e3a5f" }],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "geometry",
-    stylers: [{ color: "#243b6e" }],
-  },
-  {
-    featureType: "water",
-    elementType: "geometry",
-    stylers: [{ color: "#0c1929" }],
-  },
-];
 
 export function AnimatedMap({
   originCoords,
@@ -205,7 +175,8 @@ export function AnimatedMap({
           center: centerCoords,
           zoom,
           mapId,
-          styles: DARK_STYLE,
+          // styles cannot be used alongside mapId — dark styling must be
+          // configured in Google Cloud Console for the given mapId instead.
           disableDefaultUI: true,
           zoomControl: true,
           mapTypeControl: false,
