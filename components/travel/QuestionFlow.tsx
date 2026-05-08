@@ -93,7 +93,7 @@ export function QuestionFlow({
     <div className="rounded-2xl border border-indigo-400/20 bg-indigo-500/5 p-5 space-y-4">
       {/* Context */}
       <div className="flex items-start gap-3">
-        <span className="text-indigo-400 text-base shrink-0 mt-0.5">💬</span>
+        <span className="text-indigo-400 text-base shrink-0 mt-0.5" aria-hidden="true">💬</span>
         <p className="text-white/75 text-sm leading-relaxed">{context}</p>
       </div>
 
@@ -101,20 +101,22 @@ export function QuestionFlow({
       <div className="space-y-3">
         {questions.map((q, i) => (
           <div key={q.id} className="space-y-1.5">
-            <label className="flex items-center gap-2 text-sm text-white/80 font-medium">
-              <span className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-[10px] text-indigo-300 font-bold shrink-0">
+            <label htmlFor={`qf-input-${q.id}`} className="flex items-center gap-2 text-sm text-white/80 font-medium">
+              <span aria-hidden="true" className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-[10px] text-indigo-300 font-bold shrink-0">
                 {i + 1}
               </span>
               {q.question}
-              {q.required && <span className="text-indigo-400 text-xs">*</span>}
+              {q.required && <span className="text-indigo-400 text-xs" aria-label="required">*</span>}
             </label>
 
             {q.type === "select" && q.options ? (
-              <div className="flex flex-wrap gap-2 pl-7">
+              <div className="flex flex-wrap gap-2 pl-7" role="group" aria-label={q.question}>
                 {q.options.map((option) => (
                   <button
                     key={option}
+                    type="button"
                     onClick={() => handleChange(q.id, option)}
+                    aria-pressed={answers[q.id] === option}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all duration-150 ${
                       answers[q.id] === option
                         ? "bg-indigo-500/30 border-indigo-400/60 text-indigo-100"
@@ -128,11 +130,15 @@ export function QuestionFlow({
             ) : (
               <div className="pl-7">
                 <input
+                  id={`qf-input-${q.id}`}
                   type={q.type === "date" ? "date" : q.type === "number" ? "number" : "text"}
                   value={answers[q.id] || ""}
                   onChange={(e) => handleChange(q.id, e.target.value)}
                   placeholder={q.placeholder || `Enter ${q.question.toLowerCase()}`}
                   min={q.type === "number" ? "1" : undefined}
+                  aria-required={q.required}
+                  aria-invalid={!!errors[q.id]}
+                  aria-describedby={errors[q.id] ? `qf-error-${q.id}` : undefined}
                   className={`w-full rounded-xl bg-white/5 border px-3 py-2.5 text-sm text-white placeholder:text-white/30 transition-all duration-150 focus:outline-none ${
                     errors[q.id]
                       ? "border-red-400/50 focus:border-red-400/80 focus:bg-red-500/5"
@@ -143,7 +149,7 @@ export function QuestionFlow({
                   }}
                 />
                 {errors[q.id] && (
-                  <p className="text-red-400 text-xs mt-1">{errors[q.id]}</p>
+                  <p id={`qf-error-${q.id}`} className="text-red-400 text-xs mt-1" role="alert">{errors[q.id]}</p>
                 )}
               </div>
             )}
@@ -158,7 +164,7 @@ export function QuestionFlow({
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-semibold transition-all duration-150 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-400/30 active:scale-95"
         >
           <span>Continue</span>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16" aria-hidden="true">
             <path
               d="M3 8h10M9 4l4 4-4 4"
               stroke="currentColor"

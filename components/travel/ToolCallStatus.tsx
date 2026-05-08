@@ -395,7 +395,7 @@ export function ToolCallStatus({ toolName, state, input, output }: ToolStatusPro
     Object.keys(input as object).length > 0;
 
   return (
-    <div className="group relative">
+    <div className="group relative" role="status" aria-label={label}>
       {/* Ambient colored glow while loading */}
       {isLoading && (
         <div
@@ -440,7 +440,7 @@ export function ToolCallStatus({ toolName, state, input, output }: ToolStatusPro
                 isError ? "shadow-rose-500/25" : colors.iconShadow
               } ring-1 ring-white/40`}
             >
-              <span className="text-lg drop-shadow-sm leading-none">{meta.icon}</span>
+              <span className="text-lg drop-shadow-sm leading-none" aria-hidden="true">{meta.icon}</span>
               <div className="absolute inset-x-1 top-1 h-1/3 rounded-t-lg bg-gradient-to-b from-white/35 to-transparent pointer-events-none" />
             </div>
           </div>
@@ -490,8 +490,8 @@ export function ToolCallStatus({ toolName, state, input, output }: ToolStatusPro
                 />
               </div>
             ) : isDone && !isError ? (
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md shadow-emerald-500/30 ring-2 ring-white">
-                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 12 12">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md shadow-emerald-500/30 ring-2 ring-white" aria-label="Completed">
+                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 12 12" aria-hidden="true">
                   <path
                     d="M2 6l3 3 5-5"
                     stroke="currentColor"
@@ -502,8 +502,8 @@ export function ToolCallStatus({ toolName, state, input, output }: ToolStatusPro
                 </svg>
               </div>
             ) : isError ? (
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center shadow-md shadow-rose-500/30 ring-2 ring-white">
-                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 12 12">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center shadow-md shadow-rose-500/30 ring-2 ring-white" aria-label="Failed">
+                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 12 12" aria-hidden="true">
                   <path
                     d="M3 9L9 3M3 3l6 6"
                     stroke="currentColor"

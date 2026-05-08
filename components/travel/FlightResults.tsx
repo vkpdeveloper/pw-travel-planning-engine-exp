@@ -164,6 +164,16 @@ function FlightCard({ flight, index }: { flight: Flight; index: number }) {
       transition={{ duration: 0.35, delay: index * 0.07, ease: [0.25, 0.46, 0.45, 0.94] }}
       className="group relative rounded-2xl border border-white/10 bg-white/5 hover:bg-white/8 hover:border-indigo-400/25 transition-colors duration-200 overflow-hidden cursor-pointer"
       onClick={() => setExpanded((v) => !v)}
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
+      aria-label={`${flight.carrier.name} flight from ${flight.departure.iata} to ${flight.arrival.iata}, ${flight.price.formatted}, ${flight.stops === 0 ? "nonstop" : `${flight.stops} stop${flight.stops > 1 ? "s" : ""}`}`}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setExpanded((v) => !v);
+        }
+      }}
     >
       {/* Ambient glow on hover */}
       <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/0 to-purple-600/0 group-hover:from-indigo-600/5 group-hover:to-purple-600/5 transition-all duration-300 pointer-events-none rounded-2xl" />
@@ -226,6 +236,7 @@ function FlightCard({ flight, index }: { flight: Flight; index: number }) {
             </div>
             <button
               onClick={(e) => e.stopPropagation()}
+              aria-label={`Select ${flight.carrier.name} flight for ${flight.price.formatted}`}
               className="px-3 py-1.5 rounded-xl bg-indigo-500/25 hover:bg-indigo-500/40 active:scale-95 border border-indigo-400/30 text-indigo-200 text-[11px] font-semibold transition-all duration-150 whitespace-nowrap"
             >
               Select
@@ -333,7 +344,7 @@ export function FlightLoadingSkeleton({ from, to }: { from?: string; to?: string
       <div className="flex items-center justify-between">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-white/50 text-sm">✈</span>
+            <span className="text-white/50 text-sm" aria-hidden="true">✈</span>
             <SkeletonPulse className="w-32 h-4" />
           </div>
           <SkeletonPulse className="w-48 h-3" />
@@ -400,7 +411,7 @@ export function FlightResults({ data }: { data: FlightResultsData }) {
       >
         <div>
           <h3 className="text-white font-semibold text-sm flex items-center gap-1.5">
-            <span className="text-base">✈</span>
+            <span className="text-base" aria-hidden="true">✈</span>
             <span className="tracking-wide">{params.from}</span>
             <span className="text-white/30 text-xs">→</span>
             <span className="tracking-wide">{params.to}</span>
