@@ -309,3 +309,89 @@ export function QuestionCard({
     </motion.div>
   );
 }
+
+// ─── Loading skeleton ─────────────────────────────────────────────────────────
+
+function SkeletonPulse({ className }: { className?: string }) {
+  return (
+    <div
+      className={`rounded-lg bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100 bg-[length:200%_100%] animate-[skeleton-shimmer_1.5s_ease-in-out_infinite] ${className ?? ""}`}
+    />
+  );
+}
+
+export function QuestionCardSkeleton({ context }: { context?: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      className="max-w-xl w-full"
+    >
+      <div className="rounded-2xl border border-slate-200/70 bg-white shadow-lg shadow-slate-200/50 overflow-hidden">
+        {/* Animated gradient top bar */}
+        <div className="h-[2.5px] bg-gradient-to-r from-indigo-500 via-violet-500 to-blue-500 animate-pulse" />
+
+        <div className="px-5 pt-4 pb-3 space-y-5">
+          {/* Header — "Creating questions…" */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-blue-500 flex items-center justify-center shrink-0 shadow-md shadow-indigo-300/25">
+              {/* mini spinner */}
+              <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+            </div>
+            <div>
+              <p className="text-slate-700 text-sm font-semibold">
+                {context ? `"${context}"` : "Creating questions…"}
+              </p>
+              <p className="text-slate-400 text-[11px] mt-0.5">Building your personalised form</p>
+            </div>
+          </div>
+
+          {/* Skeleton question rows — staggered */}
+          <div className="space-y-4">
+            {[
+              { labelW: "w-2/5", inputW: ["w-20", "w-28", "w-16"] },
+              { labelW: "w-1/3", inputW: ["w-32"] },
+              { labelW: "w-1/2", inputW: ["w-24", "w-20"] },
+            ].map((row, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: i * 0.12, duration: 0.3 }}
+                className="space-y-2"
+              >
+                {/* Question label skeleton */}
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-indigo-50 border border-indigo-200/70 shrink-0 animate-pulse" />
+                  <SkeletonPulse className={`h-3 ${row.labelW}`} />
+                </div>
+                {/* Answer option skeletons */}
+                <div className="pl-7 flex gap-2">
+                  {row.inputW.map((w, j) => (
+                    <SkeletonPulse key={j} className={`h-8 ${w} rounded-xl`} />
+                  ))}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Bottom bar skeleton */}
+        <div className="px-3 pb-3">
+          <div className="flex items-center gap-2 rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-2.5">
+            <SkeletonPulse className="flex-1 h-3 max-w-[160px]" />
+            <div className="w-9 h-9 rounded-full bg-indigo-100 animate-pulse shrink-0" />
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes skeleton-shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+    </motion.div>
+  );
+}

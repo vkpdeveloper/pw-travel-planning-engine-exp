@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ToolCallStatus } from "@/components/travel/ToolCallStatus";
 import { FlightResults, FlightLoadingSkeleton } from "@/components/travel/FlightResults";
-import { QuestionFlow } from "@/components/travel/QuestionFlow";
+import { QuestionCard, QuestionCardSkeleton } from "@/components/travel/QuestionCard";
 import { PlaceCards, PlaceCardsLoadingSkeleton } from "@/components/travel/PlaceCards";
 import { ItineraryRoute } from "@/components/travel/ItineraryRoute";
 import { AerialVideo } from "@/components/travel/AerialVideo";
@@ -375,47 +375,52 @@ export default function TravelAgentPage() {
                           const mappedState = mapToolState(state);
 
                           if (toolName === "askFollowUpQuestions") {
-                            // While the model is filling in tool parameters — show status
-                            // with the streaming question list expanding below it.
-                            if (state !== "output-available") {
-                              return (
-                                <div key={partIdx}>
-                                  <ToolCallStatus
-                                    toolName={toolName}
-                                    state={mappedState}
-                                    input={toolInput}
-                                    output={output}
-                                  />
-                                </div>
-                              );
-                            }
-
-                            // Tool finished — render the inline QuestionCard.
-                            const result = output as {
-                              context: string;
-                              questions: Array<{
-                                id: string;
-                                question: string;
-                                type: "text" | "date" | "number" | "select";
-                                placeholder?: string;
-                                options?: string[];
-                                suggestions?: string[];
-                                required: boolean;
-                              }>;
-                            };
-
-                            if (!result) return null;
-
+                            const qInput = toolInput as {
+                              context?: string;
+                            } | undefined;
                             return (
-                              <div key={partIdx}>
-                                <QuestionFlow
-                                  context={result.context}
-                                  questions={result.questions}
-                                  onSubmit={(answers: Record<string, string>) =>
-                                    handleQuestionSubmit(toolCallId, answers)
-                                  }
-                                  isSubmitted={submittedQuestions.has(toolCallId)}
+                              <div key={partIdx} className="space-y-3">
+                                <ToolCallStatus
+                                  toolName={toolName}
+                                  state={mappedState}
+                                  input={toolInput}
+                                  output={output}
                                 />
+                                {/* Loading skeleton while tool is building questions */}
+                                {state !== "output-available" && (
+                                  <QuestionCardSkeleton context={qInput?.context} />
+                                )}
+                                {/* Full interactive form once output is ready */}
+                                {state === "output-available" && !!output && (
+                                  <QuestionCard
+                                    context={
+                                      (output as { context: string; questions: Array<{
+                                        id: string;
+                                        question: string;
+                                        type: "text" | "date" | "number" | "select";
+                                        placeholder?: string;
+                                        options?: string[];
+                                        suggestions?: string[];
+                                        required: boolean;
+                                      }> }).context
+                                    }
+                                    questions={
+                                      (output as { context: string; questions: Array<{
+                                        id: string;
+                                        question: string;
+                                        type: "text" | "date" | "number" | "select";
+                                        placeholder?: string;
+                                        options?: string[];
+                                        suggestions?: string[];
+                                        required: boolean;
+                                      }> }).questions
+                                    }
+                                    onSubmit={(answers) =>
+                                      handleQuestionSubmit(toolCallId, answers)
+                                    }
+                                    isSubmitted={submittedQuestions.has(toolCallId)}
+                                  />
+                                )}
                               </div>
                             );
                           }
