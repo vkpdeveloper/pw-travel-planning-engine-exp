@@ -539,10 +539,40 @@ const searchFlights = tool({
     infants,
     cabinClass,
     currency,
-    region,
   }) => {
     try {
-      const url = `${FLIGHT_BASE}/onewaytrip/${env.FLIGHTS_API_KEY}/${departureIata.toUpperCase()}/${arrivalIata.toUpperCase()}/${departureDate}/${adults}/${children}/${infants}/${cabinClass}/${currency}?region=${region}`;
+      // Validate date format (YYYY-MM-DD)
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(departureDate)) {
+        return {
+          error: "invalid_date",
+          message: `Invalid departure date format: "${departureDate}". Expected YYYY-MM-DD.`,
+          departureIata,
+          arrivalIata,
+          departureDate,
+        };
+      }
+
+      // Validate date is not in the past
+      const parsedDate = new Date(departureDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (parsedDate < today) {
+        return {
+          error: "past_date",
+          message: `Departure date ${departureDate} is in the past. Please choose a future date.`,
+          departureIata,
+          arrivalIata,
+          departureDate,
+        };
+      }
+
+      // FlightAPI docs list "region" as required in the params table, but every
+      // official example (curl, Node, Python) omits it entirely. Appending it as
+      // a query parameter causes the API to return 400 Bad Request.
+      const url = `${FLIGHT_BASE}/onewaytrip/${env.FLIGHTS_API_KEY}/${departureIata.toUpperCase()}/${arrivalIata.toUpperCase()}/${departureDate}/${adults}/${children}/${infants}/${cabinClass}/${currency}`;
+
+      console.log("[searchFlights] calling", url);
 
       const response = await fetch(url, {
         headers: { Accept: "application/json" },

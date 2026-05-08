@@ -168,8 +168,12 @@ export function AnimatedMap({
         else if (maxDiff > 2) zoom = 7;
         else zoom = 9;
 
-        const mapId =
-          process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID ?? "DEMO_MAP_ID";
+        const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
+
+        if (!mapId) {
+          setError("Google Maps Map ID not configured");
+          return;
+        }
 
         const map = new Map(mapRef.current!, {
           center: centerCoords,

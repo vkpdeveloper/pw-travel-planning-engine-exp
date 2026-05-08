@@ -19,7 +19,7 @@ gcloud builds submit \
   --region="$REGION" \
   --config="$(dirname "$0")/cloudbuild.yaml" \
   --substitutions \
-    "_GOOGLE_GENERATIVE_API_KEY=${GOOGLE_GENERATIVE_API_KEY},_GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY},_FLIGHTS_API_KEY=${FLIGHTS_API_KEY}" \
+    "_GOOGLE_GENERATIVE_API_KEY=${GOOGLE_GENERATIVE_API_KEY},_GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY},_GOOGLE_MAPS_MAP_ID=${GOOGLE_MAPS_MAP_ID},_FLIGHTS_API_KEY=${FLIGHTS_API_KEY}" \
   "$(dirname "$0")"
 
 echo "==> Deploying to Cloud Run..."
@@ -29,7 +29,7 @@ gcloud run deploy "$SERVICE" \
   --region "$REGION" \
   --platform managed \
   --port 3000 \
-  --set-env-vars "GOOGLE_GENERATIVE_API_KEY=${GOOGLE_GENERATIVE_API_KEY},GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY},FLIGHTS_API_KEY=${FLIGHTS_API_KEY},NODE_ENV=production" \
+  --set-env-vars "GOOGLE_GENERATIVE_API_KEY=${GOOGLE_GENERATIVE_API_KEY},GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY},GOOGLE_MAPS_MAP_ID=${GOOGLE_MAPS_MAP_ID},FLIGHTS_API_KEY=${FLIGHTS_API_KEY},NODE_ENV=production" \
   --allow-unauthenticated
 
 echo "==> Done."
