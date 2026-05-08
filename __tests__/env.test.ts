@@ -31,7 +31,7 @@ describe("lib/env", () => {
 
   it("defaults NODE_ENV to development when unset", async () => {
     Object.assign(process.env, VALID_ENV);
-    delete process.env.NODE_ENV;
+    delete (process.env as Record<string, string | undefined>).NODE_ENV;
     const { env } = await import("@/lib/env");
     expect(env.NODE_ENV).toBe("development");
   });
