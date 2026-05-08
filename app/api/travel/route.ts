@@ -637,8 +637,6 @@ const searchFlights = tool({
       // a query parameter causes the API to return 400 Bad Request.
       const url = `${FLIGHT_BASE}/onewaytrip/${env.FLIGHTS_API_KEY}/${departureIata.toUpperCase()}/${arrivalIata.toUpperCase()}/${departureDate}/${adults}/${children}/${infants}/${cabinClass}/${currency}`;
 
-      console.log("[searchFlights] calling", url);
-
       const response = await fetch(url, {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(15000),
@@ -767,8 +765,8 @@ export async function POST(req: Request) {
       findPlaces,
       optimizeItinerary,
     },
-    stopWhen: stepCountIs(100),
-    maxOutputTokens: 12000,
+    stopWhen: stepCountIs(10),
+    maxOutputTokens: 4096,
     maxRetries: 3,
     providerOptions: {
       google: {

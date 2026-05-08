@@ -78,7 +78,7 @@ warm-up/
 │   ├── travel/
 │   │   ├── AnimatedMap.tsx     # Dark Google Map with animated flight/road arc
 │   │   ├── FlightResults.tsx   # Flight card grid with stop indicators
-│   │   ├── QuestionFlow.tsx    # Interactive follow-up question form
+│   │   ├── QuestionCard.tsx    # Interactive follow-up question form
 │   │   └── ToolCallStatus.tsx  # Loading/success/error pill for each AI tool
 │   └── ui/
 │       ├── button.tsx          # CVA-based shadcn button
@@ -107,6 +107,7 @@ warm-up/
 GOOGLE_GENERATIVE_API_KEY=   # Gemini API key (Google AI Studio)
 GOOGLE_MAPS_API_KEY=         # Maps JS API + Geocoding API + Places API v1 + Routes API enabled
 GOOGLE_MAPS_MAP_ID=          # JavaScript Map ID from Google Maps Platform Map Management
+FLIGHTS_API_KEY=             # FlightAPI key for real-time flight search
 ```
 
 All required variables are validated at startup by `lib/env.ts`. The app will throw and refuse to start if any are missing or empty.
@@ -158,7 +159,7 @@ The backend (`app/api/travel/route.ts`) runs a **Vercel AI SDK v6 agent loop** w
 
 The agent is capped at 10 steps (`stopWhen: stepCountIs(10)`) and 4096 output tokens to prevent runaway loops.
 
-`askFollowUpQuestions` is a **passthrough tool** — its `execute` function just returns the AI's structured input unchanged. The heavy lifting is entirely on the client side (`QuestionFlow.tsx`), keeping the server stateless.
+`askFollowUpQuestions` is a **passthrough tool** — its `execute` function just returns the AI's structured input unchanged. The heavy lifting is entirely on the client side (`QuestionCard.tsx`), keeping the server stateless.
 
 ### State Management: No External Store
 
