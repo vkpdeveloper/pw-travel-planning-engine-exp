@@ -3,6 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
 
+// setOptions must only be called once per page load; guard against StrictMode
+// double-invocation and prop-change re-runs.
+let _mapsOptionsSet = false;
+function ensureMapsOptions() {
+  if (_mapsOptionsSet) return;
+  _mapsOptionsSet = true;
+  setOptions({
+    key: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
+    v: "weekly",
+  });
+}
+
 interface Coords {
   lat: number;
   lng: number;
@@ -153,8 +165,7 @@ export function AnimatedMap({
   useEffect(() => {
     if (!mapRef.current) return;
 
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
+    if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
       setError("Google Maps API key not configured");
       return;
     }
@@ -164,12 +175,14 @@ export function AnimatedMap({
 
     async function initMap() {
       try {
-        setOptions({ key: apiKey!, v: "weekly" });
+        ensureMapsOptions();
 
-        const { Map, Marker, Polyline } = (await importLibrary(
-          "maps"
-        )) as google.maps.MapsLibrary & { Marker: typeof google.maps.Marker };
-        const SymbolPath = google.maps.SymbolPath;
+        const [mapsLib, markerLib] = await Promise.all([
+          importLibrary("maps") as Promise<google.maps.MapsLibrary>,
+          importLibrary("marker") as Promise<google.maps.MarkerLibrary>,
+        ]);
+        const { Map, Polyline } = mapsLib;
+        const { AdvancedMarkerElement } = markerLib;
 
         if (!isMounted || !mapRef.current) return;
 
@@ -185,9 +198,13 @@ export function AnimatedMap({
         else if (maxDiff > 2) zoom = 7;
         else zoom = 9;
 
+        const mapId =
+          process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID ?? "DEMO_MAP_ID";
+
         const map = new Map(mapRef.current!, {
           center: centerCoords,
           zoom,
+          mapId,
           styles: DARK_STYLE,
           disableDefaultUI: true,
           zoomControl: true,
@@ -220,77 +237,97 @@ export function AnimatedMap({
           strokeOpacity: 0.9,
           strokeWeight: 3,
           map,
-          icons: isFlightRoute
-            ? [
-                {
-                  icon: {
-                    path: SymbolPath.FORWARD_CLOSED_ARROW,
-                    scale: 3,
-                    strokeColor: "#818cf8",
-                    strokeWeight: 2,
-                    fillColor: "#818cf8",
-                    fillOpacity: 1,
-                  },
-                  offset: "100%",
-                },
-              ]
-            : undefined,
         });
 
+        // Helper: create an SVG circle element for AdvancedMarkerElement content
+        function makeCircleEl(
+          fillColor: string,
+          strokeColor: string,
+          opacity = 1
+        ): SVGSVGElement {
+          const svg = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "svg"
+          );
+          svg.setAttribute("width", "24");
+          svg.setAttribute("height", "24");
+          svg.setAttribute("viewBox", "-12 -12 24 24");
+          const circle = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "circle"
+          );
+          circle.setAttribute("r", "10");
+          circle.setAttribute("fill", fillColor);
+          circle.setAttribute("fill-opacity", String(opacity));
+          circle.setAttribute("stroke", strokeColor);
+          circle.setAttribute("stroke-width", "2");
+          svg.appendChild(circle);
+          return svg;
+        }
+
         // Origin marker
-        new Marker({
+        new AdvancedMarkerElement({
           position: originCoords,
           map,
           title: origin,
-          icon: {
-            path: SymbolPath.CIRCLE,
-            scale: 10,
-            fillColor: "#6366f1",
-            fillOpacity: 1,
-            strokeColor: "#a5b4fc",
-            strokeWeight: 2,
-          },
+          content: makeCircleEl("#6366f1", "#a5b4fc"),
           zIndex: 10,
         });
 
-        // Destination marker
-        const destMarkerIcon = {
-          path: SymbolPath.CIRCLE,
-          scale: 10,
-          fillColor: "#f59e0b",
-          fillOpacity: 0,
-          strokeColor: "#fbbf24",
-          strokeWeight: 2,
-        };
-
-        const destMarker = new Marker({
+        // Destination marker — starts transparent, fills in when route completes
+        const destEl = makeCircleEl("#f59e0b", "#fbbf24", 0);
+        const destMarker = new AdvancedMarkerElement({
           position: destCoords,
           map,
           title: destination,
-          icon: { ...destMarkerIcon },
+          content: destEl,
           zIndex: 10,
         });
 
         // Moving plane/dot
-        const movingMarker = new Marker({
+        function makePlaneEl(bearing = 0): SVGSVGElement {
+          const svg = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "svg"
+          );
+          svg.setAttribute("width", "22");
+          svg.setAttribute("height", "22");
+          svg.setAttribute("viewBox", "-11 -11 22 22");
+          svg.style.transformOrigin = "center";
+          svg.style.transform = `rotate(${bearing}deg)`;
+          const path = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "path"
+          );
+          path.setAttribute(
+            "d",
+            "M 0,-4 C -1,-4 -3,-2 -3,0 L -3,2 0,1 3,2 3,0 C 3,-2 1,-4 0,-4 Z"
+          );
+          path.setAttribute("fill", "#e0e7ff");
+          path.setAttribute("stroke", "#6366f1");
+          path.setAttribute("stroke-width", "0.5");
+          svg.appendChild(path);
+          return svg;
+        }
+
+        function makeDotEl(): SVGSVGElement {
+          return makeCircleEl("#e0e7ff", "#6366f1");
+        }
+
+        const initialBearing = isFlightRoute
+          ? calculateBearing(
+              pathPoints[0],
+              pathPoints[Math.min(5, pathPoints.length - 1)]
+            )
+          : 0;
+        const movingEl = isFlightRoute
+          ? makePlaneEl(initialBearing)
+          : makeDotEl();
+
+        const movingMarker = new AdvancedMarkerElement({
           position: originCoords,
           map,
-          icon: {
-            path: isFlightRoute
-              ? "M 0,-4 C -1,-4 -3,-2 -3,0 L -3,2 0,1 3,2 3,0 C 3,-2 1,-4 0,-4 Z"
-              : SymbolPath.CIRCLE,
-            scale: isFlightRoute ? 2.5 : 7,
-            fillColor: "#e0e7ff",
-            fillOpacity: 1,
-            strokeColor: "#6366f1",
-            strokeWeight: 2,
-            rotation: isFlightRoute
-              ? calculateBearing(
-                  pathPoints[0],
-                  pathPoints[Math.min(5, pathPoints.length - 1)]
-                )
-              : 0,
-          },
+          content: movingEl,
           zIndex: 20,
         });
 
@@ -300,7 +337,10 @@ export function AnimatedMap({
         const totalDurationMs = 2800;
         const fps = 30;
         const msPerFrame = 1000 / fps;
-        const stepsPerFrame = Math.max(1, Math.round(totalSteps / (totalDurationMs / msPerFrame)));
+        const stepsPerFrame = Math.max(
+          1,
+          Math.round(totalSteps / (totalDurationMs / msPerFrame))
+        );
         let lastTime = 0;
 
         function animate(timestamp: number) {
@@ -316,23 +356,21 @@ export function AnimatedMap({
 
           if (step > 0) {
             const pos = pathPoints[step - 1];
-            movingMarker.setPosition(pos);
+            movingMarker.position = pos;
 
             if (isFlightRoute && step < totalSteps) {
               const nextPos = pathPoints[Math.min(step, totalSteps - 1)];
-              const icon = movingMarker.getIcon() as google.maps.Symbol;
-              icon.rotation = calculateBearing(pos, nextPos);
-              movingMarker.setIcon(icon);
+              (movingEl as SVGSVGElement).style.transform = `rotate(${calculateBearing(pos, nextPos)}deg)`;
             }
           }
 
           if (step < totalSteps) {
             animationFrame = requestAnimationFrame(animate);
           } else {
-            destMarker.setIcon({
-              ...destMarkerIcon,
-              fillOpacity: 1,
-            });
+            // Reveal destination marker
+            const circle = destEl.querySelector("circle");
+            if (circle) circle.setAttribute("fill-opacity", "1");
+            void destMarker; // keep reference alive
           }
         }
 
@@ -357,52 +395,48 @@ export function AnimatedMap({
   }, [originCoords, destCoords, centerCoords, encodedPolyline, isFlightRoute, origin, destination]);
 
   return (
-    <div className="relative w-full rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
-      <div ref={mapRef} className="w-full h-72 md:h-96" />
+    <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
+      <div className="relative">
+        <div ref={mapRef} className="w-full h-72 md:h-96" />
 
-      {/* Gradient overlays */}
-      <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-slate-900/60 to-transparent pointer-events-none" />
-      <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-slate-900/80 to-transparent pointer-events-none" />
-
-      {/* Route info bar */}
-      <div className="absolute bottom-0 inset-x-0 p-4 flex items-center gap-2 pointer-events-none">
-        <div className="flex items-center gap-2 bg-indigo-500/20 backdrop-blur-sm border border-indigo-400/30 rounded-full px-3 py-1.5">
-          <span className="text-indigo-300 text-xs font-semibold uppercase tracking-wide">
-            {isFlightRoute ? "✈ Flight" : "🚌 Transit"}
-          </span>
-        </div>
-        <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-full px-3 py-1.5">
-          <span className="text-white/80 text-xs font-medium">{distance}</span>
-        </div>
-        <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-full px-3 py-1.5">
-          <span className="text-white/80 text-xs font-medium">{duration}</span>
-        </div>
-      </div>
-
-      {/* Source / destination labels */}
-      <div className="absolute top-3 inset-x-0 flex justify-between px-4 pointer-events-none">
-        <div className="bg-indigo-500/25 backdrop-blur-sm border border-indigo-400/30 rounded-full px-3 py-1">
-          <span className="text-indigo-200 text-xs font-medium">📍 {origin.split(",")[0]}</span>
-        </div>
-        <div className="bg-amber-500/25 backdrop-blur-sm border border-amber-400/30 rounded-full px-3 py-1">
-          <span className="text-amber-200 text-xs font-medium">🏁 {destination.split(",")[0]}</span>
-        </div>
-      </div>
-
-      {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/90 rounded-2xl">
-          <p className="text-red-400 text-sm">{error}</p>
-        </div>
-      )}
-
-      {!loaded && !error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-5 h-5 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
-            <span className="text-white/60 text-sm">Loading map...</span>
+        <div className="absolute top-3 inset-x-0 flex justify-between px-3 pointer-events-none">
+          <div className="bg-white border border-slate-200 rounded-full px-2.5 py-1">
+            <span className="text-xs font-medium text-slate-700">
+              {origin.split(",")[0]}
+            </span>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-full px-2.5 py-1">
+            <span className="text-xs font-medium text-slate-700">
+              {destination.split(",")[0]}
+            </span>
           </div>
         </div>
-      )}
+
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/95">
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        )}
+
+        {!loaded && !error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full border-[1.5px] border-slate-300 border-t-indigo-500 animate-spin" />
+              <span className="text-slate-500 text-sm">Loading map…</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="px-4 py-2 border-t border-slate-100 flex items-center gap-3 text-xs text-slate-600">
+        <span className="font-medium text-slate-700">
+          {isFlightRoute ? "Flight" : "Transit"}
+        </span>
+        <span className="text-slate-300">·</span>
+        <span>{distance}</span>
+        <span className="text-slate-300">·</span>
+        <span>{duration}</span>
+      </div>
     </div>
   );
 }

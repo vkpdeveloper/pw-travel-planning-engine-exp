@@ -42,6 +42,13 @@ const getSystemPrompt = (userProfile?: { name?: string; location?: { displayName
 ## Your Flow
 1. **Understand the request** — extract source city/airport, destination, travel date, number of passengers, cabin preference, and experience type from the user's message.
 2. **Gather missing info via tool** — if source, destination, date, or passenger count is unclear, call \`askFollowUpQuestions\` immediately. Only ask for fields that are genuinely missing. Use \`type: "select"\` with sensible \`options\` whenever choices are finite (cabin class, trip type, number of passengers, etc.). Use \`type: "text"\` for open fields like city names. Use \`type: "date"\` for travel dates.
+
+### Writing user-facing text (CRITICAL)
+Everything in \`question\`, \`placeholder\`, and \`options\` is shown verbatim to the user. Write it like a human, not like a JSON schema:
+- **Questions**: full, friendly sentences ending in a question mark. ✅ "Which cabin class do you prefer?" ❌ "cabin_class"
+- **Options**: display labels with proper spacing and capitalization. ✅ \`["Economy", "Premium Economy", "Business", "First Class"]\` ❌ \`["Economy", "Premium_Economy", "Business", "First"]\`. Never expose enum values, snake_case, ALL_CAPS, or internal codes.
+- **Placeholders**: realistic examples in natural form. ✅ "e.g. Bengaluru" ❌ "BLR_AIRPORT"
+- When the user later answers with a friendly label (e.g. "Premium Economy"), translate it back to the API's required form when you call downstream tools (e.g. \`cabinClass: "Premium_Economy"\` for \`searchFlights\`). The translation is your job — never push internal formats onto the user.
 3. **Calculate the route** — call \`calculateRoute\` with origin and destination to get real distance, duration, and map data.
 4. **Search flights** — call \`searchFlights\` with the IATA airport codes, date, and passenger info.
 5. **Discover places** — call \`findPlaces\` with the destination and a category like "top attractions", "best restaurants", or "boutique hotels" to surface ratings, photos, opening hours, and price levels for the user.
@@ -602,6 +609,7 @@ const searchFlights = tool({
       .default("Economy")
       .describe("Cabin class preference"),
     currency: z.string().default("USD").describe("Currency code (e.g. USD, EUR, GBP)"),
+    region: z.string().default("US").describe("ISO country code for local pricing (e.g. US, GB, IN)"),
   }),
   execute: async ({
     departureIata,
@@ -612,9 +620,10 @@ const searchFlights = tool({
     infants,
     cabinClass,
     currency,
+    region,
   }) => {
     try {
-      const url = `${FLIGHT_BASE}/onewaytrip/${env.FLIGHTS_API_KEY}/${departureIata.toUpperCase()}/${arrivalIata.toUpperCase()}/${departureDate}/${adults}/${children}/${infants}/${cabinClass}/${currency}`;
+      const url = `${FLIGHT_BASE}/onewaytrip/${env.FLIGHTS_API_KEY}/${departureIata.toUpperCase()}/${arrivalIata.toUpperCase()}/${departureDate}/${adults}/${children}/${infants}/${cabinClass}/${currency}?region=${region}`;
 
       const response = await fetch(url, {
         headers: { Accept: "application/json" },
@@ -622,7 +631,7 @@ const searchFlights = tool({
       });
 
       if (!response.ok) {
-        if (response.status === 410) {
+        if (response.status === 404 || response.status === 410) {
           return {
             error: "no_flights",
             message: `No flights found from ${departureIata} to ${arrivalIata} on ${departureDate}.`,

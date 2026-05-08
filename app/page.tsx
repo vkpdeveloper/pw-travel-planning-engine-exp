@@ -27,10 +27,10 @@ const AnimatedMap = dynamic(
 
 function MapSkeleton() {
   return (
-    <div className="w-full h-72 md:h-96 rounded-2xl border border-white/10 bg-white/3 flex items-center justify-center">
-      <div className="flex items-center gap-3">
-        <div className="w-5 h-5 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
-        <span className="text-white/40 text-sm">Loading map...</span>
+    <div className="w-full h-72 md:h-96 rounded-2xl border border-slate-200 bg-white flex items-center justify-center">
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 rounded-full border-[1.5px] border-slate-300 border-t-indigo-500 animate-spin" />
+        <span className="text-slate-500 text-sm">Loading map…</span>
       </div>
     </div>
   );

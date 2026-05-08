@@ -18,7 +18,7 @@ export function AerialVideo({ data }: { data: AerialVideoData }) {
 
   if (data.error) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
         <p className="text-sm text-amber-800">
           {data.message || "Aerial view unavailable for this location."}
         </p>
@@ -26,16 +26,18 @@ export function AerialVideo({ data }: { data: AerialVideoData }) {
     );
   }
 
-  // Render-pending state
   if (!data.videoUrl) {
     return (
-      <div className="rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 border border-slate-200 p-5 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 flex items-center gap-3">
+        <div
+          aria-hidden="true"
+          className="w-4 h-4 rounded-full border-[1.5px] border-slate-300 border-t-indigo-500 animate-spin shrink-0"
+        />
         <div>
           <p className="text-sm font-medium text-slate-700">
-            Rendering cinematic aerial view...
+            Rendering aerial view…
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-500 mt-0.5">
             {data.address} · this can take a minute the first time
           </p>
         </div>
@@ -51,8 +53,8 @@ export function AerialVideo({ data }: { data: AerialVideoData }) {
   };
 
   return (
-    <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-slate-900">
-      <div className="relative aspect-video">
+    <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
+      <div className="relative aspect-video bg-slate-100">
         <video
           ref={videoRef}
           src={data.videoUrl}
@@ -69,34 +71,23 @@ export function AerialVideo({ data }: { data: AerialVideoData }) {
         {!isPlaying && (
           <button
             onClick={handlePlay}
-            className="absolute inset-0 flex items-center justify-center group bg-black/20 hover:bg-black/30 transition-colors"
+            className="absolute inset-0 flex items-center justify-center bg-black/10 hover:bg-black/20 transition-colors"
             aria-label="Play aerial view"
           >
-            <span className="w-16 h-16 rounded-full bg-white/95 flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform">
-              <svg className="w-7 h-7 text-slate-900 ml-1" viewBox="0 0 20 20" fill="currentColor">
+            <span className="w-12 h-12 rounded-full bg-white flex items-center justify-center border border-slate-200">
+              <svg className="w-5 h-5 text-slate-700 ml-0.5" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M5 3l12 7-12 7V3z" />
               </svg>
             </span>
           </button>
         )}
-
-        {/* Top label */}
-        <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/50 backdrop-blur px-2.5 py-1 rounded-full">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-white">
-            3D Aerial
-          </span>
-        </div>
-
-        {/* Bottom label */}
-        {data.address && (
-          <div className="absolute bottom-3 left-3 right-3 bg-gradient-to-t from-black/70 to-transparent pt-8 pb-1 -mx-3 -mb-3 px-3 pointer-events-none">
-            <p className="text-sm font-medium text-white truncate">
-              {data.address}
-            </p>
-          </div>
-        )}
       </div>
+
+      {data.address && (
+        <div className="px-4 py-2 border-t border-slate-100">
+          <p className="text-xs text-slate-600 truncate">{data.address}</p>
+        </div>
+      )}
     </div>
   );
 }
