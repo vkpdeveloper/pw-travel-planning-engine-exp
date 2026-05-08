@@ -20,8 +20,8 @@ const Input = React.forwardRef<HTMLTextAreaElement, InputProps>(
         ref={ref}
         data-slot="input"
         className={cn(
-          "flex w-full rounded-[32px] border border-slate-200/60 bg-white/80 backdrop-blur-2xl px-6 py-4",
-          "text-base text-slate-800 placeholder:text-slate-400 leading-relaxed",
+          "block w-full rounded-[32px] border border-slate-200/60 bg-white/80 backdrop-blur-2xl px-6 py-[18px]",
+          "text-base text-slate-800 placeholder:text-slate-400 leading-[24px] align-middle",
           "shadow-sm",
           "ring-offset-transparent transition-all duration-200 ease-in-out",
           "focus:outline-none focus:border-indigo-300 focus:bg-white focus:shadow-md focus:ring-4 focus:ring-indigo-500/10",
