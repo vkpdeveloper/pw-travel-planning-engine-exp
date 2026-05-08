@@ -25,7 +25,7 @@ const Input = React.forwardRef<HTMLTextAreaElement, InputProps>(
           "shadow-sm",
           "ring-offset-transparent transition-all duration-200 ease-in-out",
           "focus:outline-none focus:border-indigo-300 focus:bg-white focus:shadow-md focus:ring-4 focus:ring-indigo-500/10",
-          "resize-none overflow-hidden min-h-[64px] max-h-[240px]",
+          "resize-none overflow-hidden max-h-[240px]",
           "disabled:cursor-not-allowed disabled:opacity-50",
           className
         )}

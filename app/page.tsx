@@ -11,7 +11,13 @@ import { cn } from "@/lib/utils";
 import { ToolCallStatus } from "@/components/travel/ToolCallStatus";
 import { FlightResults } from "@/components/travel/FlightResults";
 import { QuestionFlow } from "@/components/travel/QuestionFlow";
+import { PlaceCards } from "@/components/travel/PlaceCards";
+import { ItineraryRoute } from "@/components/travel/ItineraryRoute";
+import { AerialVideo } from "@/components/travel/AerialVideo";
 import type { AnimatedMapProps } from "@/components/travel/AnimatedMap";
+import { UserOnboardingDialog, type UserProfile } from "@/components/travel/UserOnboardingDialog";
+import { VoiceButton } from "@/components/VoiceButton";
+import { motion } from "motion/react";
 
 // Dynamically import the map (no SSR - needs window/google)
 const AnimatedMap = dynamic(
@@ -38,17 +44,13 @@ const SUGGESTIONS = [
   "Weekend getaway from San Francisco to Las Vegas",
 ];
 
-// Typing animation dots
+// Shimmering "thinking" indicator
 function TypingDots() {
   return (
-    <div className="flex items-center gap-1 py-1">
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          className="w-2 h-2 rounded-full bg-indigo-400/60 animate-bounce"
-          style={{ animationDelay: `${i * 150}ms`, animationDuration: "1s" }}
-        />
-      ))}
+    <div className="relative inline-block">
+      <span className="bg-[linear-gradient(90deg,#94a3b8_0%,#94a3b8_40%,#0f172a_50%,#94a3b8_60%,#94a3b8_100%)] bg-[length:200%_100%] bg-clip-text text-transparent text-sm font-medium animate-[shimmer_2s_linear_infinite]">
+        Thinking
+      </span>
     </div>
   );
 }
@@ -103,9 +105,34 @@ export default function TravelAgentPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [input, setInput] = useState("");
   const [submittedQuestions, setSubmittedQuestions] = useState<Set<string>>(new Set());
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const userProfileRef = useRef<UserProfile | null>(null);
+
+  const handleProfileComplete = useCallback((profile: UserProfile) => {
+    userProfileRef.current = profile;
+    setUserProfile(profile);
+  }, []);
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/travel",
+        prepareSendMessagesRequest: ({ id, messages, body, trigger, messageId }) => ({
+          body: {
+            id,
+            messages,
+            trigger,
+            messageId,
+            ...body,
+            userProfile: userProfileRef.current,
+          },
+        }),
+      }),
+    []
+  );
 
   const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/travel" }),
+    transport,
     onError: (err: Error) => console.error("Chat error:", err),
   });
 
@@ -153,13 +180,56 @@ export default function TravelAgentPage() {
     [sendMessage]
   );
 
+  // Called when voice STT produces a transcript — send it as a chat message
+  const handleVoiceTranscript = useCallback(
+    (text: string) => {
+      if (!text.trim() || isLoading) return;
+      sendMessage({ text });
+    },
+    [sendMessage, isLoading]
+  );
+
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#fafbfc]">
-      {/* Background gradient layers - Light Mesh */}
+      <UserOnboardingDialog onComplete={handleProfileComplete} />
+      {/* Background gradient layers - Animated Mesh */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/50 pointer-events-none" />
-      <div className="absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full bg-purple-200/40 blur-3xl mix-blend-multiply pointer-events-none animate-pulse" style={{ animationDuration: '8s' }} />
-      <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] rounded-full bg-blue-200/40 blur-3xl mix-blend-multiply pointer-events-none animate-pulse" style={{ animationDuration: '10s' }} />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-pink-200/30 blur-3xl mix-blend-multiply pointer-events-none animate-pulse" style={{ animationDuration: '12s' }} />
+      <motion.div
+        className="absolute w-[600px] h-[600px] rounded-full bg-purple-300/40 blur-3xl mix-blend-multiply pointer-events-none"
+        initial={{ x: "10%", y: "-10%" }}
+        animate={{
+          x: ["10%", "60%", "30%", "10%"],
+          y: ["-10%", "20%", "50%", "-10%"],
+        }}
+        transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="absolute right-0 bottom-0 w-[500px] h-[500px] rounded-full bg-blue-300/40 blur-3xl mix-blend-multiply pointer-events-none"
+        initial={{ x: "10%", y: "10%" }}
+        animate={{
+          x: ["10%", "-40%", "-20%", "10%"],
+          y: ["10%", "-30%", "-60%", "10%"],
+        }}
+        transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="absolute top-1/2 left-1/2 w-[800px] h-[800px] rounded-full bg-pink-300/30 blur-3xl mix-blend-multiply pointer-events-none"
+        initial={{ x: "-50%", y: "-50%" }}
+        animate={{
+          x: ["-50%", "-30%", "-70%", "-50%"],
+          y: ["-50%", "-70%", "-30%", "-50%"],
+        }}
+        transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="absolute w-[450px] h-[450px] rounded-full bg-amber-200/30 blur-3xl mix-blend-multiply pointer-events-none"
+        initial={{ x: "70%", y: "60%" }}
+        animate={{
+          x: ["70%", "30%", "80%", "70%"],
+          y: ["60%", "30%", "10%", "60%"],
+        }}
+        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+      />
 
       {/* Header */}
       <header className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-slate-200/50">
@@ -220,15 +290,10 @@ export default function TravelAgentPage() {
                           const textPart = part as { type: "text"; text: string };
                           if (!textPart.text) return null;
                           return (
-                            <div key={partIdx} className="flex items-start gap-3">
-                              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shrink-0 mt-0.5">
-                                <span className="text-xs">✈</span>
-                              </div>
-                              <div className="flex-1 pt-0.5">
-                                <Streamdown isAnimating={status === "streaming"}>
-                                  {textPart.text}
-                                </Streamdown>
-                              </div>
+                            <div key={partIdx} className="pl-1">
+                              <Streamdown isAnimating={status === "streaming"}>
+                                {textPart.text}
+                              </Streamdown>
                             </div>
                           );
                         }
@@ -302,6 +367,60 @@ export default function TravelAgentPage() {
                             );
                           }
 
+                          if (toolName === "findPlaces") {
+                            return (
+                              <div key={partIdx} className="space-y-3">
+                                <ToolCallStatus
+                                  toolName={toolName}
+                                  state={mappedState}
+                                  input={toolInput}
+                                  output={output}
+                                />
+                                {state === "output-available" && !!output && (
+                                  <PlaceCards
+                                    data={output as Parameters<typeof PlaceCards>[0]["data"]}
+                                  />
+                                )}
+                              </div>
+                            );
+                          }
+
+                          if (toolName === "optimizeItinerary") {
+                            return (
+                              <div key={partIdx} className="space-y-3">
+                                <ToolCallStatus
+                                  toolName={toolName}
+                                  state={mappedState}
+                                  input={toolInput}
+                                  output={output}
+                                />
+                                {state === "output-available" && !!output && (
+                                  <ItineraryRoute
+                                    data={output as Parameters<typeof ItineraryRoute>[0]["data"]}
+                                  />
+                                )}
+                              </div>
+                            );
+                          }
+
+                          if (toolName === "aerialView") {
+                            return (
+                              <div key={partIdx} className="space-y-3">
+                                <ToolCallStatus
+                                  toolName={toolName}
+                                  state={mappedState}
+                                  input={toolInput}
+                                  output={output}
+                                />
+                                {state === "output-available" && !!output && (
+                                  <AerialVideo
+                                    data={output as Parameters<typeof AerialVideo>[0]["data"]}
+                                  />
+                                )}
+                              </div>
+                            );
+                          }
+
                           if (toolName === "searchFlights") {
                             return (
                               <div key={partIdx} className="space-y-3">
@@ -338,13 +457,8 @@ export default function TravelAgentPage() {
                 </div>
               ))}
               {isLoading && (
-                <div className="flex items-start gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shrink-0">
-                    <span className="text-xs">✈</span>
-                  </div>
-                  <div className="pt-1">
-                    <TypingDots />
-                  </div>
+                <div className="flex items-center gap-2 pl-1">
+                  <TypingDots />
                 </div>
               )}
               <div ref={messagesEndRef} />
@@ -362,7 +476,7 @@ export default function TravelAgentPage() {
           <div className="max-w-3xl mx-auto w-full space-y-8">
             {!hasMessages && (
               <div className="space-y-2">
-                <h1 className="text-2xl md:text-3xl text-slate-700 font-medium">Hi Vaibhav</h1>
+                <h1 className="text-2xl md:text-3xl text-slate-700 font-medium">Hi {userProfile?.name || "there"}</h1>
                 <h2 className="text-4xl md:text-5xl text-slate-800 font-semibold">What can I help with?</h2>
               </div>
             )}
@@ -388,11 +502,18 @@ export default function TravelAgentPage() {
                     !hasMessages && "bg-white/90 hover:bg-white shadow-sm border border-slate-200/60 text-lg py-5 px-6 min-h-[64px]"
                   )}
                 />
+                {!input.trim() && !isLoading && (
+                  <VoiceButton
+                    onTranscript={handleVoiceTranscript}
+                    disabled={isLoading}
+                    className="absolute right-3 top-1/2 -translate-y-1/2"
+                  />
+                )}
                 {(input.trim() || isLoading) && (
                   <button
                     type="submit"
                     disabled={!input.trim() || isLoading}
-                    className="absolute right-3 bottom-3 md:bottom-3.5 md:right-3.5 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed bg-indigo-500 hover:bg-indigo-400 active:scale-95 shadow-lg shadow-indigo-500/20"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed bg-indigo-500 hover:bg-indigo-400 active:scale-95 shadow-lg shadow-indigo-500/20"
                   >
                     {isLoading ? (
                       <div className="w-5 h-5 rounded-full border-2 border-slate-200/500 border-t-white animate-spin" />

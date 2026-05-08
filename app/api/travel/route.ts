@@ -13,7 +13,7 @@ const google = createGoogleGenerativeAI({
   apiKey: env.GOOGLE_GENERATIVE_API_KEY,
 })
 
-const getSystemPrompt = () => {
+const getSystemPrompt = (userProfile?: { name?: string; location?: { displayName?: string; lat?: number; lng?: number } } | null) => {
   const now = new Date();
   const dateStr = now.toLocaleString("en-US", {
     weekday: "long",
@@ -25,6 +25,11 @@ const getSystemPrompt = () => {
     second: "2-digit",
     timeZoneName: "longOffset",
   });
+
+  const userContext = userProfile
+    ? `\n\n## User Profile\n- **Name**: ${userProfile.name || "Unknown"}\n- **Home Location**: ${userProfile.location?.displayName || "Not specified"}${userProfile.location?.lat != null ? ` (${userProfile.location.lat.toFixed(4)}, ${userProfile.location.lng?.toFixed(4)})` : ""}\n\nAlways address the user by their name. When suggesting origin airports or routes, default to their home location unless they specify otherwise.`
+    : "";
+
   return `You are an expert travel experience agent — enthusiastic, knowledgeable, and deeply passionate about helping people explore the world.
 
 ## Your Flow
@@ -48,7 +53,8 @@ const getSystemPrompt = () => {
 - If the user provides partial info, extract what you can and only ask about what's missing
 - Use IATA codes for airports (e.g. JFK, CDG, BOM, LHR)
 - Always present flights and routes AFTER they load — do not make up data
-- The current date and time is **${dateStr}**`;};
+- The current date and time is **${dateStr}**${userContext}`;
+};
 
 // --- Tool: Ask Follow-Up Questions ---
 const askFollowUpQuestions = tool({
@@ -216,6 +222,363 @@ const calculateRoute = tool({
   },
 });
 
+// --- Tool: Find Places (Places API v1) ---
+const PRICE_LEVEL_MAP: Record<string, { symbol: string; label: string }> = {
+  PRICE_LEVEL_FREE: { symbol: "Free", label: "Free" },
+  PRICE_LEVEL_INEXPENSIVE: { symbol: "$", label: "Inexpensive" },
+  PRICE_LEVEL_MODERATE: { symbol: "$$", label: "Moderate" },
+  PRICE_LEVEL_EXPENSIVE: { symbol: "$$$", label: "Expensive" },
+  PRICE_LEVEL_VERY_EXPENSIVE: { symbol: "$$$$", label: "Very expensive" },
+};
+
+const findPlaces = tool({
+  description:
+    "Search for top points of interest near a destination using the Google Places API (v1). Returns rich data: ratings, opening hours, price levels, websites, and high-quality photos. Use this to surface attractions, restaurants, hotels, or themed lists for the user.",
+  inputSchema: z.object({
+    destination: z
+      .string()
+      .describe("City, neighborhood, or area to search around (e.g. 'Kyoto, Japan')"),
+    category: z
+      .enum(["attractions", "restaurants", "hotels", "cafes", "nightlife", "experiences"])
+      .describe("Category of place to surface"),
+    query: z
+      .string()
+      .optional()
+      .describe(
+        "Optional refinement, e.g. 'historic temples' or 'rooftop bars'. If omitted, a sensible category default is used."
+      ),
+    maxResults: z.number().min(1).max(8).default(6),
+  }),
+  execute: async ({ destination, category, query, maxResults }) => {
+    try {
+      const categoryPhrase: Record<string, string> = {
+        attractions: "top tourist attractions",
+        restaurants: "best restaurants",
+        hotels: "highly rated hotels",
+        cafes: "popular cafes",
+        nightlife: "best nightlife and bars",
+        experiences: "unique experiences and tours",
+      };
+      const textQuery = `${query || categoryPhrase[category]} in ${destination}`;
+
+      const fieldMask = [
+        "places.id",
+        "places.displayName",
+        "places.formattedAddress",
+        "places.location",
+        "places.rating",
+        "places.userRatingCount",
+        "places.priceLevel",
+        "places.types",
+        "places.photos",
+        "places.regularOpeningHours.openNow",
+        "places.regularOpeningHours.weekdayDescriptions",
+        "places.websiteUri",
+        "places.googleMapsUri",
+        "places.editorialSummary",
+        "places.primaryTypeDisplayName",
+      ].join(",");
+
+      const res = await fetch(`${PLACES_V1_BASE}/places:searchText`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": env.GOOGLE_MAPS_API_KEY,
+          "X-Goog-FieldMask": fieldMask,
+        },
+        body: JSON.stringify({
+          textQuery,
+          pageSize: maxResults,
+          languageCode: "en",
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        return {
+          error: "places_api_error",
+          message: `Places search failed (${res.status}): ${errText.slice(0, 200)}`,
+          destination,
+          category,
+        };
+      }
+
+      const data = (await res.json()) as { places?: Array<Record<string, unknown>> };
+      const places = (data.places || []).slice(0, maxResults).map((p) => {
+        const photos = (p.photos as Array<{ name: string; widthPx?: number; heightPx?: number }> | undefined) || [];
+        const photoUrls = photos.slice(0, 3).map(
+          (ph) =>
+            `${PLACES_V1_BASE}/${ph.name}/media?maxHeightPx=600&maxWidthPx=900&key=${env.GOOGLE_MAPS_API_KEY}`
+        );
+        const priceRaw = p.priceLevel as string | undefined;
+        const price = priceRaw ? PRICE_LEVEL_MAP[priceRaw] || null : null;
+        const hours = p.regularOpeningHours as
+          | { openNow?: boolean; weekdayDescriptions?: string[] }
+          | undefined;
+        const summary = (p.editorialSummary as { text?: string } | undefined)?.text || null;
+
+        return {
+          id: p.id as string,
+          name: (p.displayName as { text?: string } | undefined)?.text || "Unknown",
+          address: (p.formattedAddress as string) || "",
+          location: p.location as { latitude: number; longitude: number } | undefined,
+          rating: (p.rating as number) || null,
+          userRatingCount: (p.userRatingCount as number) || 0,
+          price,
+          openNow: hours?.openNow ?? null,
+          hours: hours?.weekdayDescriptions || [],
+          website: (p.websiteUri as string) || null,
+          mapsUrl: (p.googleMapsUri as string) || null,
+          summary,
+          primaryType:
+            (p.primaryTypeDisplayName as { text?: string } | undefined)?.text || null,
+          photos: photoUrls,
+        };
+      });
+
+      return {
+        success: true,
+        destination,
+        category,
+        query: textQuery,
+        count: places.length,
+        places,
+      };
+    } catch (error) {
+      console.error("findPlaces error:", error);
+      return {
+        error: "fetch_failed",
+        message: "Unable to fetch places at this time.",
+        destination,
+        category,
+      };
+    }
+  },
+});
+
+// --- Tool: Optimize Itinerary (Routes API with waypoint optimization) ---
+const optimizeItinerary = tool({
+  description:
+    "Compute an optimized day-trip route through multiple stops using Google Routes API. Pass place IDs (preferred) from findPlaces, or place names. Returns the best visit order, total time/distance, and per-leg travel times.",
+  inputSchema: z.object({
+    stops: z
+      .array(
+        z.object({
+          placeId: z.string().optional().describe("Place ID from findPlaces (preferred)"),
+          name: z.string().describe("Display name of the stop"),
+        })
+      )
+      .min(2)
+      .max(10)
+      .describe("Ordered list of stops; first is start, last is end. Intermediates are reordered."),
+    travelMode: z
+      .enum(["DRIVE", "WALK", "BICYCLE", "TRANSIT"])
+      .default("DRIVE")
+      .describe("Mode of travel between stops"),
+  }),
+  execute: async ({ stops, travelMode }) => {
+    try {
+      const toWaypoint = (s: { placeId?: string; name: string }) =>
+        s.placeId ? { placeId: s.placeId } : { address: s.name };
+
+      const origin = toWaypoint(stops[0]);
+      const destination = toWaypoint(stops[stops.length - 1]);
+      const intermediates = stops.slice(1, -1).map(toWaypoint);
+      const canOptimize = intermediates.length >= 2;
+
+      const body: Record<string, unknown> = {
+        origin,
+        destination,
+        travelMode,
+        ...(intermediates.length > 0 && { intermediates }),
+        ...(canOptimize && { optimizeWaypointOrder: true }),
+      };
+      // Routing preference is only valid for DRIVE/TWO_WHEELER
+      if (travelMode === "DRIVE") {
+        body.routingPreference = "TRAFFIC_AWARE";
+      }
+
+      const res = await fetch(MAPS_ROUTES_BASE, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": env.GOOGLE_MAPS_API_KEY,
+          "X-Goog-FieldMask": [
+            "routes.duration",
+            "routes.distanceMeters",
+            "routes.polyline.encodedPolyline",
+            "routes.legs.duration",
+            "routes.legs.distanceMeters",
+            "routes.legs.startLocation",
+            "routes.legs.endLocation",
+            "routes.optimizedIntermediateWaypointIndex",
+          ].join(","),
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        return {
+          error: "routes_api_error",
+          message: `Itinerary optimization failed (${res.status}): ${errText.slice(0, 200)}`,
+        };
+      }
+
+      const data = (await res.json()) as {
+        routes?: Array<{
+          duration?: string;
+          distanceMeters?: number;
+          polyline?: { encodedPolyline?: string };
+          legs?: Array<{
+            duration?: string;
+            distanceMeters?: number;
+            startLocation?: { latLng?: { latitude: number; longitude: number } };
+            endLocation?: { latLng?: { latitude: number; longitude: number } };
+          }>;
+          optimizedIntermediateWaypointIndex?: number[];
+        }>;
+      };
+
+      const route = data.routes?.[0];
+      if (!route) {
+        return { error: "no_route", message: "No route could be computed for these stops." };
+      }
+
+      // Build the optimized stop order
+      const optimizedIndex = route.optimizedIntermediateWaypointIndex || [];
+      const orderedStops: typeof stops = [stops[0]];
+      if (optimizedIndex.length > 0) {
+        // Indices are 0-based into the original intermediates array
+        for (const idx of optimizedIndex) {
+          orderedStops.push(stops[idx + 1]);
+        }
+      } else {
+        for (let i = 1; i < stops.length - 1; i++) orderedStops.push(stops[i]);
+      }
+      orderedStops.push(stops[stops.length - 1]);
+
+      const fmtDur = (sec: number) => {
+        const h = Math.floor(sec / 3600);
+        const m = Math.round((sec % 3600) / 60);
+        return h > 0 ? `${h}h ${m}m` : `${m}m`;
+      };
+      const totalSec = parseInt((route.duration || "0s").replace("s", ""), 10);
+      const totalMeters = route.distanceMeters || 0;
+
+      const legs = (route.legs || []).map((leg, i) => {
+        const sec = parseInt((leg.duration || "0s").replace("s", ""), 10);
+        const meters = leg.distanceMeters || 0;
+        return {
+          from: orderedStops[i].name,
+          to: orderedStops[i + 1].name,
+          duration: fmtDur(sec),
+          distanceKm: Math.round(meters / 100) / 10,
+          startLocation: leg.startLocation?.latLng,
+          endLocation: leg.endLocation?.latLng,
+        };
+      });
+
+      return {
+        success: true,
+        travelMode,
+        wasReordered: optimizedIndex.length > 0,
+        totalDuration: fmtDur(totalSec),
+        totalDistanceKm: Math.round(totalMeters / 100) / 10,
+        encodedPolyline: route.polyline?.encodedPolyline || null,
+        orderedStops: orderedStops.map((s) => s.name),
+        legs,
+      };
+    } catch (error) {
+      console.error("optimizeItinerary error:", error);
+      return {
+        error: "fetch_failed",
+        message: "Unable to optimize itinerary at this time.",
+      };
+    }
+  },
+});
+
+// --- Tool: Aerial View (cinematic 3D fly-through) ---
+const aerialView = tool({
+  description:
+    "Fetch a cinematic 3D aerial fly-through video for a landmark or address using the Google Aerial View API. Use sparingly — once per response — for the destination's hero location.",
+  inputSchema: z.object({
+    address: z
+      .string()
+      .describe("Full address or famous landmark name (e.g. 'Eiffel Tower, Paris, France')"),
+  }),
+  execute: async ({ address }) => {
+    try {
+      const lookup = async () => {
+        const url = `${AERIAL_VIEW_BASE}/videos:lookupVideo?address=${encodeURIComponent(
+          address
+        )}&key=${env.GOOGLE_MAPS_API_KEY}`;
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        return (await r.json()) as {
+          state?: string;
+          uris?: Record<string, { landscapeUri?: string; portraitUri?: string }>;
+        };
+      };
+
+      let result = await lookup();
+
+      // If video not yet rendered, request render and return placeholder
+      if (!result || result.state !== "ACTIVE") {
+        const renderRes = await fetch(`${AERIAL_VIEW_BASE}/videos:renderVideo`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": env.GOOGLE_MAPS_API_KEY,
+          },
+          body: JSON.stringify({ address }),
+        });
+
+        if (renderRes.ok) {
+          // Re-poll once after a short delay; if still not ready, return processing state
+          await new Promise((r) => setTimeout(r, 1500));
+          result = await lookup();
+        }
+      }
+
+      if (!result) {
+        return {
+          error: "aerial_unavailable",
+          message: `Aerial View is not available for "${address}".`,
+          address,
+        };
+      }
+
+      const uris = result.uris || {};
+      const mp4Landscape =
+        uris["VIDEO_FORMAT_MP4_HIGH"]?.landscapeUri ||
+        uris["VIDEO_FORMAT_MP4_MEDIUM"]?.landscapeUri ||
+        uris["VIDEO_FORMAT_MP4_LOW"]?.landscapeUri ||
+        null;
+      const thumbnail =
+        uris["IMAGE_FORMAT_JPEG"]?.landscapeUri ||
+        uris["THUMBNAIL"]?.landscapeUri ||
+        null;
+
+      return {
+        success: true,
+        address,
+        state: result.state || "PROCESSING",
+        videoUrl: mp4Landscape,
+        thumbnailUrl: thumbnail,
+      };
+    } catch (error) {
+      console.error("aerialView error:", error);
+      return {
+        error: "fetch_failed",
+        message: "Unable to load aerial view.",
+        address,
+      };
+    }
+  },
+});
+
 // --- Tool: Search Flights ---
 const searchFlights = tool({
   description:
@@ -358,18 +721,24 @@ const searchFlights = tool({
 });
 
 export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json();
+  const { messages, userProfile }: {
+    messages: UIMessage[];
+    userProfile?: { name?: string; location?: { displayName?: string; lat?: number; lng?: number } } | null;
+  } = await req.json();
 
   const result = streamText({
     model: google("gemini-3.1-flash-lite"),
-    system: getSystemPrompt(),
+    system: getSystemPrompt(userProfile),
     messages: await convertToModelMessages(messages),
     tools: {
       askFollowUpQuestions,
       calculateRoute,
       searchFlights,
+      findPlaces,
+      optimizeItinerary,
+      aerialView,
     },
-    stopWhen: stepCountIs(10),
+    stopWhen: stepCountIs(14),
     maxOutputTokens: 4096,
   });
 
