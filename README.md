@@ -41,8 +41,7 @@ By building on Google Cloud, we inherit the same infrastructure that powers Goog
 2. **Asks targeted follow-up questions** — If origin, destination, date, passenger count, or cabin class is missing, the AI generates a structured interactive form rendered inline in the chat.
 3. **Calculates the route** — Geocodes both cities, then either computes a great-circle flight arc (long haul) or queries the Google Routes API for an actual road path (short distances).
 4. **Renders an animated map** — A dark-themed Google Map draws the route progressively with a moving plane icon (or road polyline) and an info bar showing distance and duration.
-5. **Searches real-time flights** — Queries FlightAPI.io and renders up to 6 flight cards with airline, times, stops, and price.
-6. **Streams a travel narrative** — Gemini AI writes a vivid, sensory description of the journey that streams word-by-word into the chat.
+5. **Streams a travel narrative** — Gemini AI writes a vivid, sensory description of the journey that streams word-by-word into the chat.
 
 ---
 
@@ -58,7 +57,6 @@ By building on Google Cloud, we inherit the same infrastructure that powers Goog
 | AI Model | **Google Gemini** (`gemini-3.1-flash-lite`) | Fast, cheap, multimodal-capable |
 | Maps (client) | **Google Maps JS API** | Interactive animated route rendering |
 | Maps (server) | Google Geocoding API + Places API v1 + Routes API v2 | Location lookup, place discovery, and optimized directions |
-| Flight Data | **FlightAPI.io** | Real-time one-way flight search |
 | Styling | **Tailwind CSS v4** | Utility-first, no config file needed in v4 |
 | Components | **shadcn/ui** (radix-maia style) | Accessible, composable, unstyled primitives |
 | Schema Validation | **Zod v4** | Env var validation + AI tool input schemas |
@@ -109,7 +107,6 @@ warm-up/
 GOOGLE_GENERATIVE_API_KEY=   # Gemini API key (Google AI Studio)
 GOOGLE_MAPS_API_KEY=         # Maps JS API + Geocoding API + Places API v1 + Routes API enabled
 GOOGLE_MAPS_MAP_ID=          # JavaScript Map ID from Google Maps Platform Map Management
-FLIGHTS_API_KEY=             # FlightAPI.io key
 ```
 
 All required variables are validated at startup by `lib/env.ts`. The app will throw and refuse to start if any are missing or empty.
@@ -158,7 +155,6 @@ The backend (`app/api/travel/route.ts`) runs a **Vercel AI SDK v6 agent loop** w
 |---|---|
 | `askFollowUpQuestions` | AI generates structured questions; client renders them as an interactive form |
 | `calculateRoute` | Geocodes cities, computes distance/duration, returns coords + polyline |
-| `searchFlights` | Calls FlightAPI.io, normalises up to 6 itineraries |
 
 The agent is capped at 10 steps (`stopWhen: stepCountIs(10)`) and 4096 output tokens to prevent runaway loops.
 
