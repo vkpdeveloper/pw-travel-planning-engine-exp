@@ -17,7 +17,7 @@ import { AerialVideo } from "@/components/travel/AerialVideo";
 import type { AnimatedMapProps } from "@/components/travel/AnimatedMap";
 import { UserOnboardingDialog, type UserProfile } from "@/components/travel/UserOnboardingDialog";
 import { VoiceButton } from "@/components/VoiceButton";
-import { motion } from "motion/react";
+import { motion, useAnimation } from "motion/react";
 
 // Dynamically import the map (no SSR - needs window/google)
 const AnimatedMap = dynamic(
@@ -141,6 +141,74 @@ export default function TravelAgentPage() {
 
   const animatedPlaceholder = useTypewriter(SUGGESTIONS);
 
+  // Mesh gradient animation controls
+  const blob1 = useAnimation();
+  const blob2 = useAnimation();
+  const blob3 = useAnimation();
+  const blob4 = useAnimation();
+
+  useEffect(() => {
+    if (isLoading) {
+      blob1.start({
+        x: ["10%", "60%", "30%", "10%"],
+        y: ["-10%", "20%", "50%", "-10%"],
+        scale: [1, 1.18, 0.92, 1],
+        opacity: [0.55, 0.85, 0.65, 0.55],
+        transition: { duration: 7, repeat: Infinity, ease: "easeInOut" },
+      });
+      blob2.start({
+        x: ["10%", "-40%", "-20%", "10%"],
+        y: ["10%", "-30%", "-60%", "10%"],
+        scale: [1, 0.88, 1.14, 1],
+        opacity: [0.5, 0.8, 0.6, 0.5],
+        transition: { duration: 8, repeat: Infinity, ease: "easeInOut" },
+      });
+      blob3.start({
+        x: ["-50%", "-30%", "-70%", "-50%"],
+        y: ["-50%", "-70%", "-30%", "-50%"],
+        scale: [1, 1.12, 0.94, 1],
+        opacity: [0.45, 0.75, 0.55, 0.45],
+        transition: { duration: 9, repeat: Infinity, ease: "easeInOut" },
+      });
+      blob4.start({
+        x: ["70%", "30%", "80%", "70%"],
+        y: ["60%", "30%", "10%", "60%"],
+        scale: [1, 1.2, 0.9, 1],
+        opacity: [0.45, 0.72, 0.58, 0.45],
+        transition: { duration: 7.5, repeat: Infinity, ease: "easeInOut" },
+      });
+    } else {
+      // Return all blobs to their initial resting positions, then resume idle loops
+      Promise.all([
+        blob1.start({ x: "10%", y: "-10%", scale: 1, opacity: 0.4, transition: { duration: 1.8, ease: "easeInOut" } }),
+        blob2.start({ x: "10%", y: "10%", scale: 1, opacity: 0.4, transition: { duration: 1.8, ease: "easeInOut" } }),
+        blob3.start({ x: "-50%", y: "-50%", scale: 1, opacity: 0.3, transition: { duration: 1.8, ease: "easeInOut" } }),
+        blob4.start({ x: "70%", y: "60%", scale: 1, opacity: 0.3, transition: { duration: 1.8, ease: "easeInOut" } }),
+      ]).then(() => {
+        blob1.start({
+          x: ["10%", "60%", "30%", "10%"],
+          y: ["-10%", "20%", "50%", "-10%"],
+          transition: { duration: 18, repeat: Infinity, ease: "easeInOut" },
+        });
+        blob2.start({
+          x: ["10%", "-40%", "-20%", "10%"],
+          y: ["10%", "-30%", "-60%", "10%"],
+          transition: { duration: 22, repeat: Infinity, ease: "easeInOut" },
+        });
+        blob3.start({
+          x: ["-50%", "-30%", "-70%", "-50%"],
+          y: ["-50%", "-70%", "-30%", "-50%"],
+          transition: { duration: 25, repeat: Infinity, ease: "easeInOut" },
+        });
+        blob4.start({
+          x: ["70%", "30%", "80%", "70%"],
+          y: ["60%", "30%", "10%", "60%"],
+          transition: { duration: 20, repeat: Infinity, ease: "easeInOut" },
+        });
+      });
+    }
+  }, [isLoading, blob1, blob2, blob3, blob4]);
+
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -196,47 +264,23 @@ export default function TravelAgentPage() {
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/50 pointer-events-none" />
       <motion.div
         className="absolute w-[600px] h-[600px] rounded-full bg-purple-300/40 blur-3xl mix-blend-multiply pointer-events-none"
-        initial={{ x: "10%", y: "-10%" }}
-        animate={{
-          x: ["10%", "60%", "30%", "10%"],
-          y: ["-10%", "20%", "50%", "-10%"],
-          scale: isLoading ? [1, 1.18, 0.92, 1] : [1, 1, 1, 1],
-          opacity: isLoading ? [0.55, 0.85, 0.65, 0.55] : [0.4, 0.4, 0.4, 0.4],
-        }}
-        transition={{ duration: isLoading ? 7 : 18, repeat: Infinity, ease: "easeInOut" }}
+        initial={{ x: "10%", y: "-10%", scale: 1, opacity: 0.4 }}
+        animate={blob1}
       />
       <motion.div
         className="absolute right-0 bottom-0 w-[500px] h-[500px] rounded-full bg-blue-300/40 blur-3xl mix-blend-multiply pointer-events-none"
-        initial={{ x: "10%", y: "10%" }}
-        animate={{
-          x: ["10%", "-40%", "-20%", "10%"],
-          y: ["10%", "-30%", "-60%", "10%"],
-          scale: isLoading ? [1, 0.88, 1.14, 1] : [1, 1, 1, 1],
-          opacity: isLoading ? [0.5, 0.8, 0.6, 0.5] : [0.4, 0.4, 0.4, 0.4],
-        }}
-        transition={{ duration: isLoading ? 8 : 22, repeat: Infinity, ease: "easeInOut" }}
+        initial={{ x: "10%", y: "10%", scale: 1, opacity: 0.4 }}
+        animate={blob2}
       />
       <motion.div
         className="absolute top-1/2 left-1/2 w-[800px] h-[800px] rounded-full bg-pink-300/30 blur-3xl mix-blend-multiply pointer-events-none"
-        initial={{ x: "-50%", y: "-50%" }}
-        animate={{
-          x: ["-50%", "-30%", "-70%", "-50%"],
-          y: ["-50%", "-70%", "-30%", "-50%"],
-          scale: isLoading ? [1, 1.12, 0.94, 1] : [1, 1, 1, 1],
-          opacity: isLoading ? [0.45, 0.75, 0.55, 0.45] : [0.3, 0.3, 0.3, 0.3],
-        }}
-        transition={{ duration: isLoading ? 9 : 25, repeat: Infinity, ease: "easeInOut" }}
+        initial={{ x: "-50%", y: "-50%", scale: 1, opacity: 0.3 }}
+        animate={blob3}
       />
       <motion.div
         className="absolute w-[450px] h-[450px] rounded-full bg-amber-200/30 blur-3xl mix-blend-multiply pointer-events-none"
-        initial={{ x: "70%", y: "60%" }}
-        animate={{
-          x: ["70%", "30%", "80%", "70%"],
-          y: ["60%", "30%", "10%", "60%"],
-          scale: isLoading ? [1, 1.2, 0.9, 1] : [1, 1, 1, 1],
-          opacity: isLoading ? [0.45, 0.72, 0.58, 0.45] : [0.3, 0.3, 0.3, 0.3],
-        }}
-        transition={{ duration: isLoading ? 7.5 : 20, repeat: Infinity, ease: "easeInOut" }}
+        initial={{ x: "70%", y: "60%", scale: 1, opacity: 0.3 }}
+        animate={blob4}
       />
 
       {/* Header */}
