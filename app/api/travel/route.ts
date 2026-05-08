@@ -1,5 +1,5 @@
 import { google } from "@ai-sdk/google";
-import { streamText, tool, stepCountIs } from "ai";
+import { streamText, tool, stepCountIs, convertToModelMessages, UIMessage } from "ai";
 import { z } from "zod";
 import { env } from "@/lib/env";
 
@@ -95,12 +95,11 @@ const calculateRoute = tool({
         };
       }
 
-      // Get driving/transit directions for route polyline
+      // Get transit directions for route polyline
       const directionsRes = await fetch(
         `${MAPS_BASE}/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=transit&key=${env.GOOGLE_MAPS_API_KEY}`
       ).then((r) => r.json());
 
-      // Fall back to straight-line distance if no route (e.g., ocean crossings)
       let encodedPolyline: string | null = null;
       let distance = "N/A";
       let duration = "N/A";
@@ -111,8 +110,8 @@ const calculateRoute = tool({
         distance = route.legs?.[0]?.distance?.text || "N/A";
         duration = route.legs?.[0]?.duration?.text || "N/A";
       } else {
-        // Calculate straight-line distance using Haversine formula
-        const R = 6371; // km
+        // Calculate straight-line (great-circle) distance using Haversine formula
+        const R = 6371;
         const dLat = ((destCoords.lat - originCoords.lat) * Math.PI) / 180;
         const dLon = ((destCoords.lng - originCoords.lng) * Math.PI) / 180;
         const a =
@@ -124,13 +123,11 @@ const calculateRoute = tool({
         const distKm = Math.round(R * c);
         const distMi = Math.round(distKm * 0.621371);
         distance = `${distKm.toLocaleString()} km (${distMi.toLocaleString()} mi)`;
-        // Approximate flight time at 900 km/h
         const hours = Math.floor(distKm / 900);
         const mins = Math.round(((distKm / 900) % 1) * 60);
         duration = hours > 0 ? `~${hours}h ${mins}m flight` : `~${mins}m flight`;
       }
 
-      // Calculate map center and zoom
       const centerLat = (originCoords.lat + destCoords.lat) / 2;
       const centerLng = (originCoords.lng + destCoords.lng) / 2;
 
@@ -199,7 +196,7 @@ const searchFlights = tool({
         if (response.status === 410) {
           return {
             error: "no_flights",
-            message: `No flights found from ${departureIata} to ${arrivalIata} on ${departureDate}. The route may not be available or the date may be in the past.`,
+            message: `No flights found from ${departureIata} to ${arrivalIata} on ${departureDate}.`,
             departureIata,
             arrivalIata,
             departureDate,
@@ -207,7 +204,7 @@ const searchFlights = tool({
         }
         return {
           error: "api_error",
-          message: `Flight search failed (status ${response.status}). Please verify the airport codes and date.`,
+          message: `Flight search failed (status ${response.status}).`,
           departureIata,
           arrivalIata,
           departureDate,
@@ -215,25 +212,22 @@ const searchFlights = tool({
       }
 
       const data = await response.json();
-
-      // Parse and structure the flight data
       const itineraries = data.itineraries || [];
       const legs = data.legs || [];
       const carriers = data.carriers || [];
       const places = data.places || [];
 
-      // Map itineraries to a cleaner structure
       const flights = itineraries.slice(0, 6).map((itin: Record<string, unknown>) => {
         const legIds = (itin.legIds as string[]) || [];
         const leg = legs.find((l: Record<string, unknown>) => l.id === legIds[0]) || {};
         const segmentIds = (leg.segmentIds as string[]) || [];
-        const segments = data.segments?.filter((s: Record<string, unknown>) =>
-          segmentIds.includes(s.id as string)
-        ) || [];
+        const segments =
+          data.segments?.filter((s: Record<string, unknown>) =>
+            segmentIds.includes(s.id as string)
+          ) || [];
 
         const carrierId = segments[0]?.operatingCarrierId;
         const carrier = carriers.find((c: Record<string, unknown>) => c.id === carrierId);
-
         const originPlace = places.find(
           (p: Record<string, unknown>) => p.id === leg.originPlaceId
         );
@@ -272,13 +266,6 @@ const searchFlights = tool({
             ? `${Math.floor((leg.durationInMinutes as number) / 60)}h ${(leg.durationInMinutes as number) % 60}m`
             : "N/A",
           stops: (leg.stopCount as number) || 0,
-          segments: segments.map((s: Record<string, unknown>) => ({
-            flightNumber: `${(s.marketingCarrierId as string) || ""}${(s.flightNumber as string) || ""}`,
-            departure: s.departure,
-            arrival: s.arrival,
-            origin: s.originPlaceId,
-            destination: s.destinationPlaceId,
-          })),
           cabinClass,
         };
       });
@@ -310,19 +297,19 @@ const searchFlights = tool({
 });
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  const { messages }: { messages: UIMessage[] } = await req.json();
 
   const result = streamText({
     model: google("gemini-2.0-flash"),
     system: systemPrompt,
-    messages,
+    messages: await convertToModelMessages(messages),
     tools: {
       askFollowUpQuestions,
       calculateRoute,
       searchFlights,
     },
     stopWhen: stepCountIs(10),
-    maxTokens: 4096,
+    maxOutputTokens: 4096,
   });
 
   return result.toUIMessageStreamResponse();
