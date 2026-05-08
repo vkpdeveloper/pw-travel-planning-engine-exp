@@ -1,68 +1,10 @@
-"use client";
+import re
 
-import React from "react";
-import { Streamdown } from "streamdown";
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import dynamic from "next/dynamic";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import { ToolCallStatus } from "@/components/travel/ToolCallStatus";
-import { FlightResults } from "@/components/travel/FlightResults";
-import { QuestionFlow } from "@/components/travel/QuestionFlow";
-import type { AnimatedMapProps } from "@/components/travel/AnimatedMap";
+with open('app/page.tsx', 'r') as f:
+    content = f.read()
 
-// Dynamically import the map (no SSR - needs window/google)
-const AnimatedMap = dynamic(
-  () => import("@/components/travel/AnimatedMap").then((m) => m.AnimatedMap),
-  { ssr: false, loading: () => <MapSkeleton /> }
-);
-
-function MapSkeleton() {
-  return (
-    <div className="w-full h-72 md:h-96 rounded-2xl border border-white/10 bg-white/3 flex items-center justify-center">
-      <div className="flex items-center gap-3">
-        <div className="w-5 h-5 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
-        <span className="text-white/40 text-sm">Loading map...</span>
-      </div>
-    </div>
-  );
-}
-
-// Suggestion chips shown on empty state
-const SUGGESTIONS = [
-  "I want to fly from New York to Tokyo in December",
-  "Plan a business trip from London to Dubai next week",
-  "Mumbai to Paris, 2 passengers, economy, early January",
-  "Weekend getaway from San Francisco to Las Vegas",
-];
-
-// Typing animation dots
-function TypingDots() {
-  return (
-    <div className="flex items-center gap-1 py-1">
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          className="w-2 h-2 rounded-full bg-indigo-400/60 animate-bounce"
-          style={{ animationDelay: `${i * 150}ms`, animationDuration: "1s" }}
-        />
-      ))}
-    </div>
-  );
-}
-
-// Map SDK v6 tool states to ToolCallStatus legacy states
-function mapToolState(
-  state: "input-streaming" | "input-available" | "output-available" | "output-error" | string
-): "partial-call" | "call" | "result" {
-  if (state === "input-streaming") return "partial-call";
-  if (state === "input-available") return "call";
-  return "result"; // output-available, output-error, etc.
-}
-
-
+# 1. Add Typewriter logic
+typewriter_logic = """
 function useTypewriter(texts: string[]) {
   const [currentText, setCurrentText] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -98,101 +40,22 @@ function useTypewriter(texts: string[]) {
   return currentText;
 }
 
-export default function TravelAgentPage() {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [input, setInput] = useState("");
-  const [submittedQuestions, setSubmittedQuestions] = useState<Set<string>>(new Set());
+export default function TravelAgentPage() {"""
+content = content.replace("export default function TravelAgentPage() {", typewriter_logic)
 
-  const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/travel" }),
-    onError: (err: Error) => console.error("Chat error:", err),
-  });
-
-  const isLoading = status === "streaming" || status === "submitted";
-  const hasMessages = messages.length > 0;
-
+# 2. Inside the component, add animatedPlaceholder
+animated_placeholder = """
   const animatedPlaceholder = useTypewriter(SUGGESTIONS);
+"""
+content = content.replace(
+    "const hasMessages = messages.length > 0;",
+    "const hasMessages = messages.length > 0;\n" + animated_placeholder
+)
 
-
-  // Auto-scroll to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
-
-  // Auto-resize textarea
-  useEffect(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = Math.min(ta.scrollHeight, 240) + "px";
-  }, [input]);
-
-  const onSubmit = useCallback(
-    (e?: React.FormEvent) => {
-      if (e) e.preventDefault();
-      if (!input.trim() || isLoading) return;
-      sendMessage({ text: input });
-      setInput("");
-    },
-    [input, isLoading, sendMessage]
-  );
-
-  const handleSuggestion = (suggestion: string) => {
-    sendMessage({ text: suggestion });
-  };
-
-  const handleQuestionSubmit = useCallback(
-    (toolCallId: string, answers: Record<string, string>) => {
-      setSubmittedQuestions((prev) => new Set([...prev, toolCallId]));
-      const answerText = Object.entries(answers)
-        .map(([key, value]) => `${key.replace(/_/g, " ")}: ${value}`)
-        .join(", ");
-      sendMessage({ text: `Here are my answers: ${answerText}` });
-    },
-    [sendMessage]
-  );
-
-  return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#fafbfc]">
-      {/* Background gradient layers - Light Mesh */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/50 pointer-events-none" />
-      <div className="absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full bg-purple-200/40 blur-3xl mix-blend-multiply pointer-events-none animate-pulse" style={{ animationDuration: '8s' }} />
-      <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] rounded-full bg-blue-200/40 blur-3xl mix-blend-multiply pointer-events-none animate-pulse" style={{ animationDuration: '10s' }} />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-pink-200/30 blur-3xl mix-blend-multiply pointer-events-none animate-pulse" style={{ animationDuration: '12s' }} />
-
-      {/* Header */}
-      <header className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-slate-200/50">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
-            <svg
-              className="w-5 h-5 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-slate-800 font-semibold text-lg leading-tight tracking-tight">TravelMind</h1>
-            <p className="text-slate-500 text-xs font-medium">AI Travel Experience Agent</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-slate-500 text-xs font-medium">Powered by Gemini</span>
-        </div>
-      </header>
-
-      {/* Main content area */}
-      <main className="relative z-10 flex-1 flex flex-col items-center overflow-hidden">
+# 3. Replace the Main Content area
+# Remove the old main and replace with new structure
+old_main_regex = r"<main className=\"relative z-10 flex-1 flex flex-col items-center overflow-hidden\">.*?</main>"
+new_main = """<main className="relative z-10 flex-1 flex flex-col items-center overflow-hidden">
         {hasMessages ? (
           <div className="w-full flex-1 overflow-y-auto">
             <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
@@ -201,8 +64,8 @@ export default function TravelAgentPage() {
                   {/* User message */}
                   {message.role === "user" && (
                     <div className="flex justify-end">
-                      <div className="max-w-[80%] rounded-2xl rounded-tr-md bg-indigo-50 border border-indigo-100 px-4 py-3">
-                        <p className="text-slate-800 text-sm leading-relaxed">
+                      <div className="max-w-[80%] rounded-2xl rounded-tr-md bg-indigo-500/20 border border-indigo-400/20 px-4 py-3">
+                        <p className="text-white/90 text-sm leading-relaxed">
                           {message.parts
                             .filter((p) => p.type === "text")
                             .map((p) => (p as { type: "text"; text: string }).text)
@@ -362,8 +225,8 @@ export default function TravelAgentPage() {
           <div className="max-w-3xl mx-auto w-full space-y-8">
             {!hasMessages && (
               <div className="space-y-2">
-                <h1 className="text-2xl md:text-3xl text-slate-700 font-medium">Hi Vaibhav</h1>
-                <h2 className="text-4xl md:text-5xl text-slate-800 font-semibold">What can I help with?</h2>
+                <h1 className="text-2xl md:text-3xl text-white/90 font-medium">Hi Vaibhav</h1>
+                <h2 className="text-4xl md:text-5xl text-white font-semibold">What can I help with?</h2>
               </div>
             )}
             
@@ -385,17 +248,17 @@ export default function TravelAgentPage() {
                   rows={1}
                   className={cn(
                     "pr-14 transition-all",
-                    !hasMessages && "bg-white/90 hover:bg-white shadow-sm border border-slate-200/60 text-lg py-5 px-6 min-h-[64px]"
+                    !hasMessages && "bg-[#252528] hover:bg-[#2A2A2D] border-none text-lg py-5 px-6 min-h-[64px]"
                   )}
                 />
                 {(input.trim() || isLoading) && (
                   <button
                     type="submit"
                     disabled={!input.trim() || isLoading}
-                    className="absolute right-3 bottom-3 md:bottom-3.5 md:right-3.5 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed bg-indigo-500 hover:bg-indigo-400 active:scale-95 shadow-lg shadow-indigo-500/20"
+                    className="absolute right-3 bottom-3 md:bottom-3.5 md:right-3.5 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed bg-indigo-500 hover:bg-indigo-400 active:scale-95 shadow-lg shadow-indigo-500/20"
                   >
                     {isLoading ? (
-                      <div className="w-5 h-5 rounded-full border-2 border-slate-200/500 border-t-white animate-spin" />
+                      <div className="w-5 h-5 rounded-full border-2 border-white/50 border-t-white animate-spin" />
                     ) : (
                       <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 16 16">
                         <path
@@ -413,14 +276,16 @@ export default function TravelAgentPage() {
 
               {/* Hint text */}
               {hasMessages && (
-                <p className="text-center text-slate-400 text-xs">
+                <p className="text-center text-white/20 text-xs">
                   Press Enter to send · Shift+Enter for new line
                 </p>
               )}
             </div>
           </div>
         </div>
-      </main>
-    </div>
-  );
-}
+      </main>"""
+
+content = re.sub(old_main_regex, new_main, content, flags=re.DOTALL)
+
+with open('app/page.tsx', 'w') as f:
+    f.write(content)
