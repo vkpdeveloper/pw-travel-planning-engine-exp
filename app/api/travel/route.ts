@@ -1,4 +1,4 @@
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGoogleGenerativeAI, GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
 import { streamText, tool, stepCountIs, convertToModelMessages, UIMessage } from "ai";
 import { z } from "zod";
 import { env } from "@/lib/env";
@@ -746,7 +746,13 @@ export async function POST(req: Request) {
       aerialView,
     },
     stopWhen: stepCountIs(14),
-    maxOutputTokens: 4096,
+    maxOutputTokens: 12000,
+    maxRetries: 3,
+    providerOptions: {
+      google: {
+        serviceTier: 'priority'
+      } satisfies GoogleGenerativeAIProviderOptions
+    }
   });
 
   return result.toUIMessageStreamResponse();
