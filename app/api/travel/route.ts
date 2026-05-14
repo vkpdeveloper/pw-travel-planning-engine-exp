@@ -1,5 +1,5 @@
 import { createVertex } from "@ai-sdk/google-vertex";
-import { streamText, tool, stepCountIs, convertToModelMessages, UIMessage } from "ai";
+import { streamText, tool, stepCountIs, hasToolCall, convertToModelMessages, UIMessage } from "ai";
 import { z } from "zod";
 import { env } from "@/lib/env";
 
@@ -765,7 +765,7 @@ export async function POST(req: Request) {
       findPlaces,
       optimizeItinerary,
     },
-    stopWhen: stepCountIs(10),
+    stopWhen: [stepCountIs(10), hasToolCall("askFollowUpQuestions")],
     maxOutputTokens: 4096,
     maxRetries: 3,
     providerOptions: {

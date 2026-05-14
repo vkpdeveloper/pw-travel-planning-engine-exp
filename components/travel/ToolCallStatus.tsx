@@ -100,6 +100,8 @@ export function ToolCallStatus({ toolName, state, input, output }: ToolStatusPro
   const isError =
     isDone && (output as Record<string, unknown> | undefined)?.error !== undefined;
 
+  if (isError) return null;
+
   const label = isDone ? meta.resultLabel(output) : meta.label(input);
 
   return (

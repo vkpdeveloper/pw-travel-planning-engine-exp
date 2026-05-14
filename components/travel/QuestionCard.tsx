@@ -56,21 +56,7 @@ export function QuestionCard({
   };
 
   if (hasSubmitted) {
-    return (
-      <div className="max-w-xl rounded-2xl border border-slate-200 bg-white px-4 py-3">
-        <p className="text-slate-700 text-sm font-medium">Answers submitted</p>
-        <dl className="mt-2 space-y-1">
-          {questions.map((q) => (
-            <div key={q.id} className="flex items-start gap-1.5 text-xs">
-              <dt className="text-slate-500 shrink-0">{q.question}:</dt>
-              <dd className="text-slate-700 font-medium">
-                {answers[q.id] || "(not provided)"}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-    );
+    return null;
   }
 
   const answeredCount = Object.values(answers).filter(Boolean).length;

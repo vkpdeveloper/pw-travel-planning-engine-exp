@@ -255,12 +255,7 @@ export function FlightLoadingSkeleton({ from, to }: { from?: string; to?: string
 
 export function FlightResults({ data }: { data: FlightResultsData }) {
   if (data.error) {
-    return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-        <p className="text-sm font-medium text-amber-800">Flight search notice</p>
-        <p className="text-sm text-amber-700 mt-1">{data.message}</p>
-      </div>
-    );
+    return null;
   }
 
   if (!data.flights || data.flights.length === 0) {

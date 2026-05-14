@@ -299,11 +299,7 @@ export function PlaceCardsLoadingSkeleton({ destination }: { destination?: strin
 
 export function PlaceCards({ data }: { data: PlaceCardsData }) {
   if (data.error) {
-    return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
-        <p className="text-sm text-red-700">{data.message || "Could not load places."}</p>
-      </div>
-    );
+    return null;
   }
   if (!data.places || data.places.length === 0) return null;
 
