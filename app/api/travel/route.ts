@@ -1,4 +1,4 @@
-import { createGoogleGenerativeAI, GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
+import { createVertex } from "@ai-sdk/google-vertex";
 import { streamText, tool, stepCountIs, convertToModelMessages, UIMessage } from "ai";
 import { z } from "zod";
 import { env } from "@/lib/env";
@@ -9,7 +9,7 @@ const MAPS_ROUTES_BASE = "https://routes.googleapis.com/directions/v2:computeRou
 const FLIGHT_BASE = "https://api.flightapi.io";
 const GEMINI_MODEL = "gemini-3.1-flash-lite";
 
-const google = createGoogleGenerativeAI({
+const google = createVertex({
   apiKey: env.GOOGLE_GENERATIVE_API_KEY,
 });
 
@@ -771,7 +771,7 @@ export async function POST(req: Request) {
     providerOptions: {
       google: {
         serviceTier: 'priority'
-      } satisfies GoogleGenerativeAIProviderOptions
+      }
     }
   });
 

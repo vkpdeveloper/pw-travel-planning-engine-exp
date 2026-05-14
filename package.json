@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.70",
+    "@ai-sdk/google-vertex": "^4.0.128",
     "@ai-sdk/react": "^3.0.178",
     "@google/genai": "^2.0.0",
     "@googlemaps/js-api-loader": "^2.0.2",

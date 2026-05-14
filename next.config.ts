@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: env.GOOGLE_MAPS_API_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: env.GOOGLE_MAPS_MAP_ID,
   },
+  allowedDevOrigins: [
+      'macair'
+  ]
 };
 
 export default nextConfig;
